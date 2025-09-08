@@ -364,25 +364,7 @@ function Button({
   );
 }
 
-  const base =
-    "inline-flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-medium transition shadow-sm";
-  const map: Record<string, string> = {
-    primary:
-      "bg-neutral-900 text-white hover:bg-neutral-800 active:bg-neutral-900 dark:bg-white dark:text-neutral-900",
-    ghost: "bg-transparent hover:bg-neutral-100 dark:hover:bg-neutral-800",
-    outline:
-      "border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800",
-  };
-  return (
-    <button
-      type={type}
-      className={`${base} ${map[variant]} ${className}`}
-      onClick={onClick}
-    >
-      {children}
-    </button>
-  );
-}
+  
 
 function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
