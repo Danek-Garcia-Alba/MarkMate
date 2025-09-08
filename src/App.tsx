@@ -163,7 +163,7 @@ interface StoreState {
 
 export const useCourseStore = create<StoreState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       courses: [],
       calendarTheme: "system",
       addCourse: (name) =>
@@ -305,8 +305,12 @@ function Modal({
 
 function Badge({
   children,
-  intent = "default" as "default" | "success" | "danger" | "info",
+  intent = "default",
+}: {
+  children: React.ReactNode;
+  intent?: "default" | "success" | "danger" | "info";
 }) {
+
   const map: Record<string, string> = {
     default:
       "bg-neutral-100 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-100",
@@ -327,10 +331,17 @@ function Badge({
 function Button({
   children,
   onClick,
-  variant = "primary" as "primary" | "ghost" | "outline",
+  variant = "primary",
   type = "button",
   className = "",
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  variant?: "primary" | "ghost" | "outline";
+  type?: "button" | "submit" | "reset";
+  className?: string;
 }) {
+
   const base =
     "inline-flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-medium transition shadow-sm";
   const map: Record<string, string> = {
