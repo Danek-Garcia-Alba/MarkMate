@@ -330,17 +330,39 @@ function Badge({
 
 function Button({
   children,
-  onClick,
-  variant = "primary",
-  type = "button",
+  onClick, // now optional
+  variant = "primary" as "primary" | "ghost" | "outline",
+  type = "button" as "button" | "submit" | "reset",
   className = "",
+  title,
 }: {
   children: React.ReactNode;
-  onClick: () => void;
+  onClick?: () => void; // <-- optional
   variant?: "primary" | "ghost" | "outline";
   type?: "button" | "submit" | "reset";
   className?: string;
+  title?: string; // <-- allowed
 }) {
+  const base =
+    "inline-flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-medium transition shadow-sm";
+  const map: Record<string, string> = {
+    primary:
+      "bg-neutral-900 text-white hover:bg-neutral-800 active:bg-neutral-900 dark:bg-white dark:text-neutral-900",
+    ghost: "bg-transparent hover:bg-neutral-100 dark:hover:bg-neutral-800",
+    outline:
+      "border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-800",
+  };
+  return (
+    <button
+      type={type}
+      className={`${base} ${map[variant]} ${className}`}
+      onClick={onClick}   // can be undefined for submit buttons
+      title={title}
+    >
+      {children}
+    </button>
+  );
+}
 
   const base =
     "inline-flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-medium transition shadow-sm";
