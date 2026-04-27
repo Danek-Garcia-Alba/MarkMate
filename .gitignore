@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.tsbuildinfo
+vite-dev.*.log
+.pnpm-debug.log
+vite.config.js
+vite.config.d.ts
+.vercel/
+.env
+.env.*
+!.env.example
+.codex*.png

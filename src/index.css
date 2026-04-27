@@ -1,3 +1,1251 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  color-scheme: light;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+html {
+  min-height: 100%;
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+}
+
+.app-shell {
+  --theme-bg-image: none;
+  --theme-primary: #0f172a;
+  --theme-accent: #0ea5e9;
+  --theme-overlay: rgba(248, 250, 252, 0.88);
+  --theme-bg-position: left top;
+  --theme-bg-render-width: max(100vw, 199vh);
+  --university-rail-width: clamp(17rem, 20vw, 26rem);
+  --university-safe-left: clamp(18rem, 20vw, 25rem);
+  position: relative;
+  isolation: isolate;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 18% 8%, color-mix(in srgb, var(--theme-accent) 13%, transparent), transparent 26rem),
+    radial-gradient(circle at 92% 18%, color-mix(in srgb, var(--theme-primary) 11%, transparent), transparent 31rem),
+    linear-gradient(135deg, rgb(248 250 252), rgb(241 245 249));
+}
+
+.app-shell > * {
+  position: relative;
+  z-index: 2;
+}
+
+.app-shell::before,
+.app-shell::after {
+  position: fixed;
+  content: "";
+  pointer-events: none;
+  z-index: 0;
+}
+
+.app-shell::before {
+  inset: 0 auto 0 0;
+  width: clamp(6rem, 14vw, 14rem);
+  background:
+    radial-gradient(circle at 46% 18%, rgba(255, 255, 255, 0.16), transparent 5.5rem),
+    linear-gradient(180deg, color-mix(in srgb, var(--theme-primary) 94%, #111827), color-mix(in srgb, var(--theme-accent) 54%, var(--theme-primary))),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent);
+  clip-path: polygon(0 0, 76% 0, 98% 16%, 82% 44%, 96% 75%, 70% 100%, 0 100%);
+  opacity: 0.94;
+}
+
+.app-shell::after {
+  inset: 0;
+  background-image:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.06), rgba(248, 250, 252, 0.12)),
+    var(--theme-bg-image);
+  background-position: center, var(--theme-bg-position);
+  background-repeat: no-repeat;
+  background-size: cover, var(--theme-bg-render-width) auto;
+  filter: saturate(0.98) contrast(0.98);
+  opacity: 0;
+  mask-image: none;
+}
+
+.app-shell[data-app-mode="university"]::before {
+  inset: 0 auto 0 0;
+  width: var(--university-rail-width);
+  background-image: var(--theme-bg-image);
+  background-position: var(--theme-bg-position);
+  background-repeat: no-repeat;
+  background-size: var(--theme-bg-render-width) auto;
+  clip-path: none;
+  opacity: 1;
+  filter: saturate(1.08) contrast(1.04);
+  mask-image: linear-gradient(90deg, black 0%, black calc(100% - 3rem), rgba(0, 0, 0, 0.9) calc(100% - 1.2rem), transparent 100%);
+  z-index: 1;
+}
+
+.app-shell[data-app-mode="university"]::after {
+  opacity: 0.82;
+}
+
+.app-shell[data-app-mode="custom"]::before {
+  opacity: 0.18;
+  clip-path: polygon(0 0, 100% 0, 70% 100%, 0 100%);
+}
+
+.app-shell[data-app-mode="custom"]::after {
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 16% 20%, color-mix(in srgb, var(--theme-accent) 15%, transparent) 0 0.35rem, transparent 0.38rem),
+    radial-gradient(circle at 86% 24%, color-mix(in srgb, var(--theme-primary) 12%, transparent), transparent 18rem),
+    linear-gradient(90deg, transparent 0 31px, rgba(15, 23, 42, 0.035) 32px),
+    linear-gradient(180deg, transparent 0 31px, rgba(15, 23, 42, 0.035) 32px);
+  background-size: auto, auto, 32px 32px, 32px 32px;
+  opacity: 0.72;
+  filter: none;
+  mask-image: linear-gradient(180deg, black, transparent 72%);
+}
+
+.dark .app-shell {
+  --theme-overlay: rgba(2, 6, 23, 0.84);
+  background:
+    radial-gradient(circle at 18% 8%, color-mix(in srgb, var(--theme-accent) 16%, transparent), transparent 26rem),
+    radial-gradient(circle at 92% 18%, color-mix(in srgb, var(--theme-primary) 18%, transparent), transparent 31rem),
+    linear-gradient(135deg, rgb(2 6 23), rgb(15 23 42));
+}
+
+.dark .app-shell::after {
+  background-image:
+    linear-gradient(180deg, rgba(2, 6, 23, 0.08), rgba(2, 6, 23, 0.22)),
+    var(--theme-bg-image);
+  opacity: 0;
+  mix-blend-mode: normal;
+}
+
+.dark .app-shell[data-app-mode="university"]::after {
+  opacity: 0.58;
+}
+
+@media (max-width: 760px) {
+  .app-shell::before {
+    width: 4.75rem;
+    opacity: 0.28;
+  }
+
+  .app-shell::after {
+    background-size: cover, var(--theme-bg-render-width) auto;
+    opacity: 0.32;
+  }
+
+  .app-shell[data-app-mode="university"]::before {
+    width: clamp(7rem, 28vw, 11rem);
+    opacity: 0.86;
+    mask-image: linear-gradient(90deg, black 0%, rgba(0, 0, 0, 0.92) 72%, transparent 100%);
+  }
+
+  .app-shell[data-app-mode="university"]::after {
+    opacity: 0.76;
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-shell[data-app-mode="university"] > main:not(.home-page),
+  .app-shell[data-app-mode="university"] .utility-bar {
+    width: min(80rem, calc(100% - var(--university-safe-left) - clamp(1rem, 3vw, 2rem)));
+    max-width: none;
+    margin-left: max(var(--university-safe-left), calc((100% - 80rem) / 2));
+    margin-right: auto;
+  }
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.progress-ring {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+.progress-ring-path {
+  transition:
+    stroke-dashoffset 700ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    stroke 220ms ease;
+}
+
+.progress-ring-complete {
+  animation: ring-pop 850ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.assignment-row {
+  animation: surface-in 180ms ease-out;
+}
+
+.course-card {
+  animation: surface-in 220ms ease-out;
+}
+
+.course-card-complete {
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    0 18px 45px -30px rgba(16, 185, 129, 0.45),
+    inset 0 0 0 1px rgba(16, 185, 129, 0.12);
+}
+
+.course-card-complete::after {
+  position: absolute;
+  inset: -40% -20%;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(
+    110deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.32) 48%,
+    transparent 60%
+  );
+  animation: sheen 3.5s ease-in-out infinite;
+}
+
+.stat-tile {
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-tile::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    rgba(14, 165, 233, 0.12),
+    transparent 38%,
+    rgba(34, 197, 94, 0.1)
+  );
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.stat-tile:hover::before {
+  opacity: 1;
+}
+
+.folder-heading {
+  position: relative;
+  overflow: hidden;
+}
+
+.folder-heading-complete {
+  box-shadow:
+    0 20px 55px -36px rgba(16, 185, 129, 0.5),
+    inset 0 0 0 1px rgba(16, 185, 129, 0.12);
+}
+
+.folder-heading-complete::after {
+  position: absolute;
+  right: 1rem;
+  top: -1.75rem;
+  content: "DONE";
+  color: rgba(16, 185, 129, 0.12);
+  font-size: 4rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  pointer-events: none;
+}
+
+.dashboard-hero {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.78)),
+    linear-gradient(120deg, color-mix(in srgb, var(--theme-primary) 22%, transparent), color-mix(in srgb, var(--theme-accent) 18%, transparent) 52%, rgba(245, 158, 11, 0.22));
+}
+
+.dark .dashboard-hero {
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.88), rgba(2, 6, 23, 0.86)),
+    linear-gradient(120deg, rgba(14, 165, 233, 0.24), rgba(34, 197, 94, 0.14) 52%, rgba(245, 158, 11, 0.18));
+}
+
+.dashboard-hero::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(rgba(15, 23, 42, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.08) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(90deg, transparent, black 20%, black 80%, transparent);
+}
+
+.dashboard-hero::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.48) 52%, rgba(255, 255, 255, 0.72)),
+    linear-gradient(rgba(15, 23, 42, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.08) 1px, transparent 1px);
+  background-position: center, center, center;
+  background-repeat: no-repeat;
+  background-size: cover, 34px 34px, 34px 34px;
+  opacity: 0.78;
+  filter: none;
+}
+
+.dashboard-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.app-shell[data-app-mode="custom"] .dashboard-hero::before {
+  background-image:
+    radial-gradient(circle at 74% 24%, color-mix(in srgb, var(--theme-accent) 18%, transparent), transparent 10rem),
+    linear-gradient(90deg, transparent 0 31px, rgba(15, 23, 42, 0.04) 32px),
+    linear-gradient(180deg, transparent 0 31px, rgba(15, 23, 42, 0.04) 32px);
+  background-size: auto, 32px 32px, 32px 32px;
+  opacity: 0.58;
+  filter: none;
+}
+
+.home-page {
+  animation: surface-in 260ms ease-out;
+}
+
+.home-hero {
+  position: relative;
+  min-height: min(680px, calc(100vh - 96px));
+  display: grid;
+  align-items: center;
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.76)),
+    conic-gradient(
+      from 210deg at 48% 52%,
+      #0ea5e9,
+      #22c55e,
+      #f59e0b,
+      #e11d48,
+      #8b5cf6,
+      #0ea5e9
+    );
+}
+
+.home-grid-lines {
+  position: absolute;
+  inset: 0;
+  opacity: 0.26;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.16) 1px, transparent 1px);
+  background-size: 48px 48px;
+  transform: perspective(900px) rotateX(54deg) translateY(13%);
+  transform-origin: bottom;
+}
+
+.home-hero::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      112deg,
+      transparent 0 18px,
+      rgba(255, 255, 255, 0.08) 18px 19px
+    ),
+    linear-gradient(180deg, transparent, rgba(15, 23, 42, 0.26));
+  mix-blend-mode: screen;
+}
+
+.home-preview {
+  position: relative;
+  z-index: 1;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.46);
+  padding: 1rem;
+  color: white;
+  box-shadow:
+    0 24px 80px -45px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(18px);
+}
+
+.home-preview-top {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 1rem;
+}
+
+.home-mini-card {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 0.625rem;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.home-calendar-button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.12);
+  padding: 0.85rem 1rem;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 700;
+  transition:
+    transform 150ms ease,
+    background 150ms ease;
+}
+
+.home-calendar-button:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.home-feature {
+  transition:
+    transform 150ms ease,
+    box-shadow 150ms ease,
+    border-color 150ms ease;
+}
+
+.home-feature:hover {
+  transform: translateY(-2px);
+  border-color: rgb(14 165 233 / 0.4);
+  box-shadow: 0 22px 60px -36px rgba(14, 165, 233, 0.42);
+}
+
+.old-home-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.old-home-card::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(236, 72, 153, 0.1), transparent 32%),
+    linear-gradient(45deg, transparent 58%, rgba(34, 197, 94, 0.11));
+}
+
+.old-home-card > * {
+  position: relative;
+}
+
+.topbar-shell {
+  box-shadow: 0 16px 44px -38px color-mix(in srgb, var(--theme-primary) 46%, transparent);
+}
+
+.app-shell[data-app-mode="university"] .topbar-shell {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+.app-shell[data-app-mode="university"] .dashboard-hero,
+.app-shell[data-app-mode="university"] .stat-tile,
+.app-shell[data-app-mode="university"] main > .rounded-lg.border.border-slate-200.bg-white {
+  border-color: rgba(203, 213, 225, 0.56);
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow:
+    0 24px 70px -54px color-mix(in srgb, var(--theme-primary) 50%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px) saturate(1.08);
+}
+
+.app-shell[data-app-mode="university"] .dashboard-hero::before,
+.app-shell[data-app-mode="university"] .university-semester-locker::after {
+  opacity: 0.28;
+}
+
+.app-shell[data-app-mode="university"] .university-semester-locker {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0.5)),
+    linear-gradient(120deg, color-mix(in srgb, var(--theme-primary) 9%, transparent), color-mix(in srgb, var(--theme-accent) 7%, transparent));
+  backdrop-filter: blur(8px) saturate(1.06);
+}
+
+.app-shell[data-app-mode="university"] .university-year-column {
+  background: rgba(255, 255, 255, 0.68);
+  backdrop-filter: blur(6px);
+}
+
+.app-shell[data-app-mode="university"] .locked-semester-button:not(.locked-semester-button-active) {
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.topbar-shell::before {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  content: "";
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--theme-primary) 42%, transparent),
+    color-mix(in srgb, var(--theme-accent) 36%, transparent),
+    transparent
+  );
+}
+
+.home-preview-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.home-preview-card::after {
+  position: absolute;
+  right: -3.5rem;
+  top: -5rem;
+  width: 12rem;
+  height: 12rem;
+  content: "";
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-accent) 18%, transparent);
+}
+
+.home-preview-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.mode-card {
+  --mode-primary: #0f172a;
+  --mode-accent: #0ea5e9;
+  --mode-theme-image: none;
+  position: relative;
+  overflow: hidden;
+  padding-left: clamp(5.35rem, 15vw, 8.75rem) !important;
+  border-color: rgb(226 232 240);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.78)),
+    linear-gradient(120deg, color-mix(in srgb, var(--mode-primary) 14%, transparent), color-mix(in srgb, var(--mode-accent) 12%, transparent));
+  box-shadow: 0 24px 80px -56px color-mix(in srgb, var(--mode-primary) 48%, transparent);
+  transition:
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.mode-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--mode-primary) 28%, white);
+  box-shadow: 0 28px 90px -56px color-mix(in srgb, var(--mode-primary) 68%, transparent);
+}
+
+.mode-card::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: clamp(4.8rem, 16vw, 8rem);
+  content: "";
+  background:
+    radial-gradient(circle at 48% 18%, rgba(255, 255, 255, 0.22), transparent 4rem),
+    linear-gradient(180deg, var(--mode-primary), color-mix(in srgb, var(--mode-accent) 48%, var(--mode-primary)));
+  clip-path: polygon(0 0, 74% 0, 100% 45%, 70% 100%, 0 100%);
+  opacity: 0.94;
+}
+
+.mode-card-university::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background-image:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.66) 48%, rgba(255, 255, 255, 0.78)),
+    var(--mode-theme-image);
+  background-position: center, left top;
+  background-repeat: no-repeat;
+  background-size: cover, cover;
+  opacity: 0.96;
+  filter: saturate(1.02) contrast(1.02);
+}
+
+.mode-card-university::before {
+  background:
+    radial-gradient(circle at 48% 20%, rgba(255, 255, 255, 0.2), transparent 4.25rem),
+    radial-gradient(circle at 38% 84%, color-mix(in srgb, var(--mode-accent) 18%, transparent), transparent 5rem),
+    linear-gradient(180deg, var(--mode-primary), color-mix(in srgb, var(--mode-accent) 48%, var(--mode-primary)));
+}
+
+.mode-card-custom::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background-image:
+    radial-gradient(circle at 72% 20%, color-mix(in srgb, var(--mode-accent) 18%, transparent), transparent 9rem),
+    linear-gradient(90deg, transparent 0 27px, color-mix(in srgb, var(--mode-primary) 6%, transparent) 28px),
+    linear-gradient(180deg, transparent 0 27px, color-mix(in srgb, var(--mode-primary) 6%, transparent) 28px);
+  background-size: auto, 28px 28px, 28px 28px;
+  opacity: 0.64;
+}
+
+.mode-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.mode-card-active {
+  border-color: color-mix(in srgb, var(--mode-primary) 46%, white);
+  box-shadow:
+    0 30px 90px -58px color-mix(in srgb, var(--mode-primary) 76%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--mode-primary) 16%, transparent);
+}
+
+.custom-swatch {
+  height: 3.25rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.6);
+  background:
+    linear-gradient(135deg, var(--mode-primary), transparent 52%),
+    linear-gradient(45deg, transparent 28%, var(--mode-accent));
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    border-color 160ms ease;
+}
+
+.custom-swatch:hover,
+.custom-swatch-active {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--mode-primary) 46%, white);
+  box-shadow: 0 14px 36px -26px color-mix(in srgb, var(--mode-primary) 70%, transparent);
+}
+
+.dark .mode-card {
+  border-color: rgb(30 41 59);
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 0.84)),
+    linear-gradient(120deg, color-mix(in srgb, var(--mode-primary) 24%, transparent), color-mix(in srgb, var(--mode-accent) 16%, transparent));
+}
+
+.dark .mode-card-university::after {
+  background-image:
+    linear-gradient(90deg, rgba(2, 6, 23, 0.98), rgba(2, 6, 23, 0.7) 48%, rgba(2, 6, 23, 0.86)),
+    var(--mode-theme-image);
+}
+
+.dark .mode-card .text-slate-600,
+.dark .mode-card .text-slate-500 {
+  color: rgb(203 213 225);
+}
+
+.semester-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 999px;
+  background: white;
+  padding: 0.45rem 0.75rem;
+  color: rgb(71 85 105);
+  font-size: 0.875rem;
+  font-weight: 650;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.semester-tab:hover {
+  transform: translateY(-1px);
+  border-color: rgb(148 163 184);
+  color: rgb(15 23 42);
+}
+
+.semester-tab-active {
+  border-color: rgb(15 23 42);
+  background: rgb(15 23 42);
+  color: white;
+  box-shadow: 0 14px 34px -24px rgba(15, 23, 42, 0.55);
+}
+
+.dark .semester-tab {
+  border-color: rgb(30 41 59);
+  background: rgb(2 6 23);
+  color: rgb(203 213 225);
+}
+
+.dark .semester-tab:hover {
+  border-color: rgb(71 85 105);
+  color: white;
+}
+
+.dark .semester-tab-active {
+  border-color: white;
+  background: white;
+  color: rgb(15 23 42);
+}
+
+.university-semester-locker {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--theme-primary) 18%, rgb(226 232 240));
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.72)),
+    linear-gradient(120deg, color-mix(in srgb, var(--theme-primary) 12%, transparent), color-mix(in srgb, var(--theme-accent) 10%, transparent));
+  padding: 1rem;
+  box-shadow: 0 24px 70px -54px color-mix(in srgb, var(--theme-primary) 64%, transparent);
+}
+
+.university-semester-locker::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background-image:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.5)),
+    linear-gradient(90deg, transparent 0 31px, rgba(15, 23, 42, 0.035) 32px),
+    linear-gradient(180deg, transparent 0 31px, rgba(15, 23, 42, 0.035) 32px);
+  background-position: center, center, center;
+  background-repeat: no-repeat;
+  background-size: cover, 32px 32px, 32px 32px;
+  opacity: 0.68;
+  filter: none;
+  mask-image: none;
+}
+
+.university-semester-locker > * {
+  position: relative;
+  z-index: 1;
+}
+
+.university-year-column {
+  border-radius: 0.65rem;
+  border: 1px solid rgba(226, 232, 240, 0.86);
+  background: rgba(255, 255, 255, 0.72);
+  padding: 0.75rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58);
+}
+
+.locked-semester-button {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.65rem;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  background: rgba(255, 255, 255, 0.88);
+  padding: 0.62rem 0.75rem;
+  color: rgb(51 65 85);
+  font-size: 0.88rem;
+  font-weight: 750;
+  text-align: left;
+  transition:
+    transform 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
+}
+
+.locked-semester-button:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--semester-color) 48%, rgb(148 163 184));
+  box-shadow: 0 18px 42px -30px color-mix(in srgb, var(--semester-color) 70%, transparent);
+}
+
+.locked-semester-button-active {
+  border-color: color-mix(in srgb, var(--semester-color) 70%, rgb(15 23 42));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--semester-color) 16%, white), white);
+  color: rgb(15 23 42);
+  box-shadow:
+    0 18px 48px -30px color-mix(in srgb, var(--semester-color) 72%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--semester-color) 18%, transparent);
+}
+
+.dark .university-semester-locker {
+  border-color: color-mix(in srgb, var(--theme-primary) 34%, rgb(30 41 59));
+  background:
+    linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(2, 6, 23, 0.78)),
+    linear-gradient(120deg, color-mix(in srgb, var(--theme-primary) 18%, transparent), color-mix(in srgb, var(--theme-accent) 14%, transparent));
+}
+
+.dark .university-year-column {
+  border-color: rgb(30 41 59);
+  background: rgba(2, 6, 23, 0.62);
+}
+
+.dark .locked-semester-button {
+  border-color: rgb(51 65 85);
+  background: rgba(15, 23, 42, 0.8);
+  color: rgb(203 213 225);
+}
+
+.dark .locked-semester-button-active {
+  color: white;
+}
+
+.pass-helper-button {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0ea5e9, #22c55e, #f59e0b);
+  color: white;
+  box-shadow:
+    0 0 0 0 rgba(14, 165, 233, 0.45),
+    0 18px 42px -28px rgba(14, 165, 233, 0.95);
+  animation: pass-glow 2.2s ease-in-out infinite;
+}
+
+.pass-helper-button:hover {
+  filter: brightness(1.04);
+}
+
+.pass-mode-active .course-detail-dim {
+  opacity: 0.3;
+  filter: grayscale(0.65);
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    filter 180ms ease;
+}
+
+.pass-helper-panel {
+  position: sticky;
+  top: 4.75rem;
+  z-index: 30;
+  box-shadow:
+    0 24px 80px -48px rgba(14, 165, 233, 0.72),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+.pass-done-button {
+  background: linear-gradient(135deg, #22c55e, #0ea5e9);
+  color: white;
+}
+
+.pass-select-row {
+  position: relative;
+  transform: translateZ(0);
+}
+
+.pass-select-row:hover {
+  border-color: rgb(14 165 233);
+  box-shadow: 0 18px 50px -36px rgba(14, 165, 233, 0.55);
+}
+
+.pass-select-row-active {
+  border-color: rgb(34 197 94) !important;
+  background:
+    linear-gradient(135deg, rgba(34, 197, 94, 0.12), rgba(14, 165, 233, 0.1)),
+    white !important;
+  box-shadow: 0 18px 54px -38px rgba(34, 197, 94, 0.7);
+}
+
+.dark .pass-select-row-active {
+  background:
+    linear-gradient(135deg, rgba(34, 197, 94, 0.18), rgba(14, 165, 233, 0.13)),
+    rgb(2 6 23) !important;
+}
+
+@keyframes pass-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(14, 165, 233, 0.4),
+      0 18px 42px -28px rgba(14, 165, 233, 0.95);
+  }
+  50% {
+    box-shadow:
+      0 0 0 8px rgba(14, 165, 233, 0),
+      0 20px 52px -22px rgba(34, 197, 94, 0.95);
+  }
+}
+
+.celebration-toast {
+  position: fixed;
+  right: 1rem;
+  top: 5rem;
+  z-index: 60;
+  display: flex;
+  max-width: min(92vw, 420px);
+  align-items: center;
+  gap: 0.9rem;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  color: white;
+  box-shadow: 0 24px 70px -34px rgba(15, 23, 42, 0.65);
+  animation: toast-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.celebration-course {
+  background: linear-gradient(135deg, #0ea5e9, #22c55e);
+}
+
+.celebration-folder {
+  background: linear-gradient(135deg, #7c3aed, #0ea5e9 50%, #22c55e);
+}
+
+.celebration-all {
+  background: linear-gradient(135deg, #e11d48, #f59e0b 45%, #22c55e);
+}
+
+.celebration-toast-icon {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes sheen {
+  0% {
+    transform: translateX(-60%) rotate(8deg);
+  }
+  42%,
+  100% {
+    transform: translateX(72%) rotate(8deg);
+  }
+}
+
+@keyframes ring-pop {
+  0% {
+    transform: scale(0.96);
+    filter: drop-shadow(0 0 0 rgba(34, 197, 94, 0));
+  }
+  45% {
+    transform: scale(1.04);
+    filter: drop-shadow(0 10px 22px rgba(34, 197, 94, 0.26));
+  }
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 rgba(34, 197, 94, 0));
+  }
+}
+
+@keyframes surface-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.calendar-shell .fc {
+  --fc-border-color: rgb(226 232 240);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: rgb(248 250 252);
+  --fc-today-bg-color: rgba(14, 165, 233, 0.08);
+  --fc-small-font-size: 0.78rem;
+  color: rgb(15 23 42);
+}
+
+.dark .calendar-shell .fc {
+  --fc-border-color: rgb(30 41 59);
+  --fc-neutral-bg-color: rgb(15 23 42);
+  --fc-today-bg-color: rgba(56, 189, 248, 0.12);
+  color: rgb(241 245 249);
+}
+
+.calendar-shell .fc .fc-toolbar {
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.calendar-shell .fc .fc-toolbar-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.calendar-shell .fc .fc-button {
+  border: 1px solid rgb(203 213 225);
+  border-radius: 0.375rem;
+  background: white;
+  color: rgb(15 23 42);
+  box-shadow: none;
+  font-size: 0.83rem;
+  font-weight: 600;
+  padding: 0.42rem 0.7rem;
+  text-transform: capitalize;
+}
+
+.calendar-shell .fc .fc-button:hover,
+.calendar-shell .fc .fc-button:focus {
+  border-color: rgb(148 163 184);
+  background: rgb(248 250 252);
+  color: rgb(15 23 42);
+  box-shadow: none;
+}
+
+.dark .calendar-shell .fc .fc-button {
+  border-color: rgb(51 65 85);
+  background: rgb(2 6 23);
+  color: rgb(241 245 249);
+}
+
+.dark .calendar-shell .fc .fc-button:hover,
+.dark .calendar-shell .fc .fc-button:focus {
+  background: rgb(15 23 42);
+  color: white;
+}
+
+.calendar-shell .fc .fc-col-header-cell {
+  border-color: transparent;
+  background: transparent;
+  padding: 0.35rem 0;
+}
+
+.calendar-shell .fc .fc-col-header-cell-cushion {
+  color: rgb(100 116 139);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.calendar-shell .fc .fc-daygrid-day {
+  background: white;
+}
+
+.dark .calendar-shell .fc .fc-daygrid-day {
+  background: rgb(2 6 23);
+}
+
+.calendar-shell .fc .fc-daygrid-day-frame {
+  min-height: 104px;
+  padding: 0.35rem;
+}
+
+.calendar-shell .fc .fc-daygrid-day-number {
+  display: inline-grid;
+  min-width: 1.65rem;
+  height: 1.65rem;
+  place-items: center;
+  border-radius: 999px;
+  color: rgb(51 65 85);
+  font-size: 0.8rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.dark .calendar-shell .fc .fc-daygrid-day-number {
+  color: rgb(203 213 225);
+}
+
+.calendar-shell .fc .fc-day-today .fc-daygrid-day-number {
+  background: rgb(14 165 233);
+  color: white;
+}
+
+.calendar-shell .fc .fc-day-other {
+  background: rgb(248 250 252);
+}
+
+.dark .calendar-shell .fc .fc-day-other {
+  background: rgb(15 23 42);
+}
+
+.calendar-shell .fc .fc-event {
+  margin: 1px 2px;
+  border-radius: 0.375rem;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  transition:
+    transform 130ms ease,
+    box-shadow 130ms ease,
+    border-color 130ms ease;
+}
+
+.calendar-shell .fc .fc-event:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px -14px rgba(15, 23, 42, 0.55);
+}
+
+.calendar-shell .fc .fc-daygrid-event-harness {
+  margin-top: 2px;
+}
+
+.mm-event-content {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.42rem;
+  line-height: 1.1;
+}
+
+.mm-event-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+}
+
+.mm-event-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.mm-event-course {
+  display: none;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgb(71 85 105);
+  font-size: 0.68rem;
+}
+
+@media (min-width: 920px) {
+  .mm-event-course {
+    display: inline;
+  }
+}
+
+.calendar-shell .fc .mm-event-overdue {
+  background: rgba(239, 68, 68, 0.14) !important;
+}
+
+.calendar-shell .fc .mm-event-completed {
+  opacity: 0.72;
+}
+
+.calendar-shell .fc .fc-popover {
+  border-radius: 0.5rem;
+  border-color: rgb(203 213 225);
+  box-shadow: 0 18px 50px -28px rgba(15, 23, 42, 0.45);
+  overflow: hidden;
+}
+
+.dark .calendar-shell .fc .fc-popover {
+  border-color: rgb(51 65 85);
+  background: rgb(2 6 23);
+}
+
+.calendar-pastel .fc {
+  --fc-today-bg-color: rgba(245, 158, 11, 0.12);
+}
+
+.calendar-pastel .fc .fc-daygrid-day {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), white);
+}
+
+.calendar-high-contrast .fc {
+  --fc-border-color: rgb(15 23 42);
+  --fc-today-bg-color: rgba(15, 23, 42, 0.13);
+}
+
+.calendar-high-contrast .fc .fc-event {
+  border-width: 2px;
+}
+
+.calendar-minimal .fc {
+  --fc-border-color: transparent;
+  --fc-today-bg-color: transparent;
+}
+
+.calendar-minimal .fc .fc-scrollgrid,
+.calendar-minimal .fc .fc-daygrid-day,
+.calendar-minimal .fc .fc-col-header-cell {
+  border-color: transparent;
+}
+
+.calendar-academic .fc {
+  --fc-today-bg-color: color-mix(in srgb, var(--theme-primary) 12%, transparent);
+}
+
+.calendar-academic .fc .fc-day-today .fc-daygrid-day-number {
+  background: var(--theme-primary);
+}
+
+.calendar-academic .fc .fc-button {
+  border-color: color-mix(in srgb, var(--theme-primary) 24%, white);
+}
+
+.calendar-deadline .fc {
+  --fc-today-bg-color: rgba(249, 115, 22, 0.12);
+}
+
+.calendar-deadline .fc .fc-daygrid-day-frame {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 247, 237, 0.54));
+}
+
+.calendar-deadline .fc .fc-event {
+  box-shadow: inset 3px 0 0 rgba(249, 115, 22, 0.52);
+}
+
+.late-penalty-button {
+  border-color: rgb(251 146 60) !important;
+  background: linear-gradient(135deg, rgba(248, 113, 22, 0.18), rgba(225, 29, 72, 0.12)) !important;
+  color: rgb(194 65 12) !important;
+  box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.32);
+  animation: late-glow 2.4s ease-in-out infinite;
+}
+
+@keyframes late-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.32);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(249, 115, 22, 0);
+  }
+}
+
+@media (max-width: 680px) {
+  .calendar-shell .fc .fc-toolbar {
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .calendar-shell .fc .fc-daygrid-day-frame {
+    min-height: 82px;
+    padding: 0.2rem;
+  }
+
+  .mm-event-title {
+    font-size: 0.7rem;
+  }
+}
