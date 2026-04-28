@@ -11,6 +11,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   Plus,
+  Search,
   Settings,
   Sparkles,
   Trash2,
@@ -21,19 +22,23 @@ import {
   averageDetail,
   buildCourseGradeRecords,
   calcMetrics,
+  courseChronology,
   formatCredits,
+  folderDisplayName,
   formatSchoolAverage,
   getActiveTheme,
   gpaSessionRows,
   gpaWaitingCourseCount,
   gpaYearRows,
   selectedUniversityId,
+  smartSearchMatch,
   useCourseStore,
   type Assignment,
   type AssignmentStatus,
   type Course,
   type CourseFolder,
 } from "../desktop/DesktopApp";
+import { MarkMateLogo } from "../MarkMateLogo";
 import {
   calculateUniversityReport,
   formatAverage,
@@ -119,7 +124,7 @@ function folderLabel(course: Course, folders: CourseFolder[]) {
   if (!course.folderId) return "Unfiled";
   const folder = folders.find((item) => item.id === course.folderId);
   if (!folder) return "Unfiled";
-  return folder.year ? `${folder.year} ${folder.name}` : folder.name;
+  return folderDisplayName(folder);
 }
 
 function formatPercent(value: number | null | undefined) {
@@ -279,9 +284,7 @@ function MobileGpaHero({
 function EmptyCourses({ onAddCourse }: { onAddCourse: () => void }) {
   return (
     <section className="rounded-[2rem] border border-dashed border-slate-300 bg-white/95 p-6 text-center shadow-soft backdrop-blur">
-      <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-slate-950 text-white">
-        <BookOpen className="h-7 w-7" />
-      </div>
+      <MarkMateLogo size="lg" className="mx-auto" />
       <h2 className="mt-4 text-2xl font-black tracking-tight">
         Add your first course.
       </h2>
@@ -303,9 +306,11 @@ function EmptyCourses({ onAddCourse }: { onAddCourse: () => void }) {
 function MobileDashboard({
   onOpenGpa,
   onGoCourses,
+  onOpenCourse,
 }: {
   onOpenGpa: () => void;
   onGoCourses: () => void;
+  onOpenCourse: (courseId: string) => void;
 }) {
   const courses = useCourseStore((state) => state.courses);
   const folders = useCourseStore((state) => state.folders);
@@ -313,6 +318,13 @@ function MobileDashboard({
   const addCourse = useCourseStore((state) => state.addCourse);
   const report = useGpaReport();
   const defaultFolderId = folders[0]?.id ?? null;
+  const foldersById = useMemo(
+    () =>
+      new Map<string, CourseFolder>(
+        folders.map((folder) => [folder.id, folder])
+      ),
+    [folders]
+  );
   const nextAssignment = useMemo(() => {
     return courses
       .flatMap((course) =>
@@ -326,7 +338,19 @@ function MobileDashboard({
         )
       )[0];
   }, [courses]);
-  const activeCourses = courses.slice(0, 3);
+  const activeCourses = useMemo(
+    () =>
+      courses
+        .slice()
+        .sort((a, b) => {
+          const folderDelta =
+            courseChronology(a, foldersById) - courseChronology(b, foldersById);
+          if (folderDelta !== 0) return folderDelta;
+          return a.name.localeCompare(b.name, undefined, { numeric: true });
+        })
+        .slice(0, 3),
+    [courses, foldersById]
+  );
 
   return (
     <div className="space-y-5">
@@ -346,7 +370,12 @@ function MobileDashboard({
       </div>
 
       {courses.length === 0 ? (
-        <EmptyCourses onAddCourse={() => addCourse("New Course", defaultFolderId)} />
+        <EmptyCourses
+          onAddCourse={() => {
+            const courseId = addCourse("New Course", defaultFolderId);
+            onOpenCourse(courseId);
+          }}
+        />
       ) : (
         <>
           <section className="rounded-[2rem] border border-white/70 bg-white/95 p-5 shadow-soft backdrop-blur">
@@ -486,6 +515,14 @@ function MobileCourses({
   const folders = useCourseStore((state) => state.folders);
   const addCourse = useCourseStore((state) => state.addCourse);
   const [filter, setFilter] = useState("all");
+  const [query, setQuery] = useState("");
+  const foldersById = useMemo(
+    () =>
+      new Map<string, CourseFolder>(
+        folders.map((folder) => [folder.id, folder])
+      ),
+    [folders]
+  );
 
   const folderOptions = [
     { id: "all", label: "All" },
@@ -495,12 +532,38 @@ function MobileCourses({
       label: folder.year ? `${folder.year} ${folder.name}` : folder.name,
     })),
   ];
-  const filteredCourses = courses.filter((course) => {
-    if (filter === "all") return true;
-    if (filter === "unfiled") return !course.folderId;
-    return course.folderId === filter;
-  });
+  const filteredCourses = courses
+    .filter((course) => {
+      const folder = course.folderId ? foldersById.get(course.folderId) ?? null : null;
+      const matchesQuery = smartSearchMatch(
+        [
+          course.name,
+          folderDisplayName(folder),
+          folder?.name,
+          folder?.year,
+          ...course.assignments.map((assignment) => assignment.title),
+        ],
+        query
+      );
+      const matchesFilter =
+        filter === "all"
+          ? true
+          : filter === "unfiled"
+          ? !course.folderId
+          : course.folderId === filter;
+      return matchesQuery && matchesFilter;
+    })
+    .sort((a, b) => {
+      const folderDelta =
+        courseChronology(a, foldersById) - courseChronology(b, foldersById);
+      if (folderDelta !== 0) return folderDelta;
+      return a.name.localeCompare(b.name, undefined, { numeric: true });
+    });
   const defaultFolderId = folders[0]?.id ?? null;
+  const createCourse = () => {
+    const courseId = addCourse("New Course", defaultFolderId);
+    onOpenCourse(courseId);
+  };
 
   return (
     <div className="space-y-5">
@@ -517,7 +580,7 @@ function MobileCourses({
           <button
             type="button"
             className="grid min-h-12 min-w-12 place-items-center rounded-2xl bg-slate-950 text-white shadow-soft active:scale-[0.98]"
-            onClick={() => addCourse("New Course", defaultFolderId)}
+            onClick={createCourse}
             aria-label="Add course"
           >
             <Plus className="h-5 w-5" />
@@ -542,10 +605,19 @@ function MobileCourses({
             );
           })}
         </div>
+        <label className="relative mt-4 block">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+          <input
+            className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white pl-12 pr-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search CIV344 or Essay"
+          />
+        </label>
       </section>
 
       {courses.length === 0 ? (
-        <EmptyCourses onAddCourse={() => addCourse("New Course", defaultFolderId)} />
+        <EmptyCourses onAddCourse={createCourse} />
       ) : (
         <div className="space-y-3">
           {filteredCourses.map((course) => (
@@ -1208,9 +1280,7 @@ export default function MobileApp() {
             />
             <div className="-mt-8 flex items-end justify-between gap-4 px-4 pb-4">
               <div>
-                <div className="grid h-14 w-14 place-items-center rounded-2xl bg-slate-950 text-white shadow-soft ring-4 ring-white">
-                  <GraduationCap className="h-7 w-7" />
-                </div>
+                <MarkMateLogo size="lg" className="ring-4 ring-white" />
                 <p className="mt-3 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
                   {activeTheme.label}
                 </p>
@@ -1228,6 +1298,10 @@ export default function MobileApp() {
         ) : activeTab === "dashboard" ? (
           <MobileDashboard
             onOpenGpa={() => setGpaOpen(true)}
+            onOpenCourse={(courseId) => {
+              setActiveTab("courses");
+              setSelectedCourseId(courseId);
+            }}
             onGoCourses={() => {
               setSelectedCourseId(null);
               setActiveTab("courses");

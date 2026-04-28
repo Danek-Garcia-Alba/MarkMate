@@ -14,7 +14,6 @@ import {
   CircleHelp,
   ClipboardList,
   Copy,
-  Download,
   Filter,
   Folder,
   FolderPlus,
@@ -22,7 +21,6 @@ import {
   Info,
   LayoutDashboard,
   ListPlus,
-  LockKeyhole,
   Medal,
   Pencil,
   PartyPopper,
@@ -33,12 +31,12 @@ import {
   Sparkles,
   Trash2,
   Trophy,
-  Upload,
   X,
 } from "lucide-react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
+import { MarkMateLogo } from "../MarkMateLogo";
 import {
   calculateUniversityReport,
   formatAverage,
@@ -593,6 +591,85 @@ function compareDue(a: Assignment, b: Assignment) {
   );
 }
 
+export function folderDisplayName(folder: CourseFolder | null) {
+  if (!folder) return "No semester";
+  return folder.year ? `${folder.year} / ${folder.name}` : folder.name;
+}
+
+function searchKey(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function editDistanceWithin(a: string, b: string, maxDistance = 1) {
+  if (!a || !b) return false;
+  if (Math.abs(a.length - b.length) > maxDistance) return false;
+  let previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i];
+    let rowMin = current[0];
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      const value = Math.min(
+        previous[j] + 1,
+        current[j - 1] + 1,
+        previous[j - 1] + cost
+      );
+      current[j] = value;
+      rowMin = Math.min(rowMin, value);
+    }
+    if (rowMin > maxDistance) return false;
+    previous = current;
+  }
+  return previous[b.length] <= maxDistance;
+}
+
+export function smartSearchMatch(values: Array<string | null | undefined>, query: string) {
+  const rawQuery = query.trim().toLowerCase();
+  if (!rawQuery) return true;
+  const compactQuery = searchKey(rawQuery);
+  const queryParts = rawQuery
+    .split(/[^a-z0-9]+/i)
+    .map(searchKey)
+    .filter(Boolean);
+
+  return values.some((value) => {
+    if (!value) return false;
+    const rawValue = value.toLowerCase();
+    const compactValue = searchKey(rawValue);
+    if (rawValue.includes(rawQuery) || compactValue.includes(compactQuery)) {
+      return true;
+    }
+    const valueParts = rawValue
+      .split(/[^a-z0-9]+/i)
+      .map(searchKey)
+      .filter(Boolean);
+    return queryParts.every((part) =>
+      valueParts.some(
+        (candidate) =>
+          candidate.includes(part) ||
+          part.includes(candidate) ||
+          editDistanceWithin(candidate, part, part.length >= 5 ? 2 : 1)
+      )
+    );
+  });
+}
+
+function folderChronology(folder: CourseFolder | null) {
+  if (!folder) return 9999;
+  const yearMatch = folder.year?.match(/\d+/);
+  const yearIndex = yearMatch ? Number(yearMatch[0]) - 1 : 99;
+  const termIndex = DEFAULT_TERM_LABELS.findIndex((term) => term === folder.name);
+  return yearIndex * 10 + (termIndex >= 0 ? termIndex : 9);
+}
+
+export function courseChronology(
+  course: Course,
+  foldersById: Map<string, CourseFolder>
+) {
+  const folder = course.folderId ? foldersById.get(course.folderId) ?? null : null;
+  return folderChronology(folder);
+}
+
 function nextDue(assignments: Assignment[]): Assignment | null {
   const upcoming = assignments
     .filter((a) => a.dueDate && a.status !== "completed")
@@ -1113,7 +1190,7 @@ interface StoreState {
   calendarTheme: CalendarTheme;
   universityThemeId: UniversityThemeId;
   customThemeId: CustomThemeId;
-  addCourse: (name: string, folderId?: string | null) => void;
+  addCourse: (name: string, folderId?: string | null) => string;
   renameCourse: (id: string, name: string) => void;
   updateCourse: (id: string, patch: Partial<Course>) => void;
   setCourseColor: (id: string, color: string) => void;
@@ -1149,12 +1226,13 @@ export const useCourseStore = create<StoreState>()(
       calendarTheme: "system",
       universityThemeId: "uoft",
       customThemeId: "classic",
-      addCourse: (name, folderId = null) =>
+      addCourse: (name, folderId = null) => {
+        const id = uid();
         set((state) => ({
           courses: [
             ...state.courses,
             {
-              id: uid(),
+              id,
               name,
               assignments: [],
               folderId,
@@ -1162,7 +1240,9 @@ export const useCourseStore = create<StoreState>()(
                 DEFAULT_COLORS[state.courses.length % DEFAULT_COLORS.length],
             },
           ],
-        })),
+        }));
+        return id;
+      },
       renameCourse: (id, name) =>
         set((state) => ({
           courses: state.courses.map((c) =>
@@ -1525,17 +1605,20 @@ function SelectBox({
   children,
   className = "",
   title,
+  onClick,
 }: {
   value: string;
   onChange: (v: string) => void;
   children: React.ReactNode;
   className?: string;
   title?: string;
+  onClick?: React.MouseEventHandler<HTMLSelectElement>;
 }) {
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      onClick={onClick}
       className={`w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-50 dark:focus:border-white dark:focus:ring-white/10 ${className}`}
       title={title}
     >
@@ -1817,10 +1900,12 @@ function AddCourseModal({
   open,
   onClose,
   defaultFolderId,
+  onCreated,
 }: {
   open: boolean;
   onClose: () => void;
   defaultFolderId: string | null;
+  onCreated: (courseId: string) => void;
 }) {
   const addCourse = useCourseStore((s) => s.addCourse);
   const folders = useCourseStore((s) => s.folders);
@@ -1844,8 +1929,9 @@ function AddCourseModal({
       setError("Course name is required");
       return;
     }
-    addCourse(trimmed, folderId);
+    const courseId = addCourse(trimmed, folderId);
     onClose();
+    onCreated(courseId);
   };
 
   return (
@@ -2011,7 +2097,7 @@ function AddAssignmentModal({
       title: title.trim(),
       dueDate: dueDate || null,
       weight: weight.trim() === "" ? 0 : parseFlexibleNumber(weight)!,
-      status,
+      status: grade.trim() === "" ? status : "completed",
       grade: grade.trim() === "" ? null : parseGradeInput(grade),
     });
     onClose();
@@ -2083,7 +2169,7 @@ function AddAssignmentModal({
         title: row.title.trim(),
         dueDate: normalizedDate || null,
         weight: parsedWeight,
-        status: row.status,
+        status: parsedGrade == null ? row.status : "completed",
         grade: parsedGrade,
       });
     }
@@ -2379,9 +2465,7 @@ function TopBar({
           className="flex items-center gap-2 rounded-md px-1 py-1 text-left hover:opacity-80"
           aria-label="Go to dashboard"
         >
-          <span className="grid h-9 w-9 place-items-center rounded-md bg-slate-950 text-white dark:bg-white dark:text-slate-950">
-            <BookOpen className="h-5 w-5" />
-          </span>
+          <MarkMateLogo size="sm" />
           <span>
             <span className="block text-sm font-semibold leading-4">
               MarkMate
@@ -2460,8 +2544,7 @@ function TopBar({
               </Button>
             ) : (
               <div className="inline-flex min-h-9 items-center gap-2 rounded-md border border-slate-200 bg-white/70 px-3 py-2 text-sm font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-300">
-                <LockKeyhole className="h-4 w-4" />
-                Locked semesters
+                University semesters
               </div>
             )}
             <Button onClick={onAddCourse}>
@@ -2482,67 +2565,6 @@ function TopBar({
         </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function ExportImportBar() {
-  const courses = useCourseStore((s) => s.courses);
-  const folders = useCourseStore((s) => s.folders);
-
-  const exportJson = () => {
-    const blob = new Blob([JSON.stringify({ folders, courses }, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "markmate_export.json";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const importJson = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const obj = JSON.parse(String(reader.result));
-        if (obj && Array.isArray(obj.courses)) {
-          useCourseStore.setState({
-            courses: obj.courses,
-            folders: Array.isArray(obj.folders) ? obj.folders : [],
-          });
-          alert("Imported successfully.");
-        } else {
-          alert("Invalid file format.");
-        }
-      } catch {
-        alert("Could not parse JSON.");
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  return (
-    <div className="utility-bar mx-auto flex max-w-7xl items-center justify-end gap-2 px-4 pt-4 text-sm">
-      <Button variant="outline" onClick={exportJson}>
-        <Download className="h-4 w-4" />
-        Export
-      </Button>
-      <label className="inline-flex min-h-9 cursor-pointer items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-800">
-        <Upload className="h-4 w-4" />
-        Import
-        <input
-          type="file"
-          accept="application/json"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) importJson(file);
-            e.currentTarget.value = "";
-          }}
-        />
-      </label>
     </div>
   );
 }
@@ -2992,16 +3014,21 @@ function CourseCard({
 
   return (
     <article
-      className={`course-card rounded-lg border bg-white p-4 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg dark:bg-slate-950 ${
+      className={`course-card cursor-pointer rounded-lg border bg-white p-4 shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-slate-900/20 dark:bg-slate-950 ${
         complete
           ? "course-card-complete border-emerald-300 dark:border-emerald-800"
           : "border-slate-200 dark:border-slate-800"
       }`}
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
     >
-      <div
-        className="mb-4 h-1.5 rounded-full"
-        style={{ backgroundColor: course.color ?? DEFAULT_COLORS[0] }}
-      />
       {complete && (
         <div className="mb-3 inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-white shadow-sm">
           <Trophy className="h-3.5 w-3.5" />
@@ -3025,7 +3052,7 @@ function CourseCard({
                   className="mr-1 h-2 w-2 rounded-full"
                   style={{ backgroundColor: folder.color }}
                 />
-                {folder.name}
+                {folderDisplayName(folder)}
               </Badge>
             )}
             <Badge intent={dueTone(next?.dueDate ?? null, next?.status ?? "not_started") as any}>
@@ -3068,7 +3095,10 @@ function CourseCard({
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      <div
+        className="mt-4 flex flex-wrap items-center gap-2"
+        onClick={(event) => event.stopPropagation()}
+      >
         <Button onClick={onOpen} className="flex-1">
           Open
         </Button>
@@ -3177,12 +3207,7 @@ function FolderSection({
                     Folder complete
                   </Badge>
                 )}
-                {universityLocked && (
-                  <Badge intent="info">
-                    <LockKeyhole className="mr-1 h-3 w-3" />
-                    Locked
-                  </Badge>
-                )}
+                {universityLocked && <Badge intent="info">University term</Badge>}
               </div>
               <div className="mt-2 h-2 max-w-sm overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
                 <div
@@ -3261,8 +3286,7 @@ function FolderSection({
               )}
               {universityLocked && (
                 <div className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-semibold text-slate-500 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-300">
-                  <LockKeyhole className="h-3.5 w-3.5" />
-                  Fixed university semester
+                  University semester
                 </div>
               )}
             </>
@@ -3296,10 +3320,12 @@ function Dashboard({
   onOpenCourse,
   onAddCourse,
   onAddFolder,
+  focusFolderId,
 }: {
   onOpenCourse: (id: string) => void;
   onAddCourse: (folderId: string | null) => void;
   onAddFolder: () => void;
+  focusFolderId: string | null;
 }) {
   const courses = useCourseStore((s) => s.courses);
   const folders = useCourseStore((s) => s.folders);
@@ -3380,6 +3406,14 @@ function Dashboard({
   }, [selectedSemester, semesterFilter]);
 
   useEffect(() => {
+    if (!focusFolderId) return;
+    const folder = foldersById.get(focusFolderId);
+    if (!folder) return;
+    setYearFilter(folder.year ?? "Custom");
+    setSemesterFilter(folder.id);
+  }, [focusFolderId, foldersById]);
+
+  useEffect(() => {
     if (!selectedSemester) return;
     setSemesterName(selectedSemester.name);
     setSemesterYear(selectedSemester.year ?? DEFAULT_YEAR_LABELS[0]);
@@ -3388,14 +3422,21 @@ function Dashboard({
   }, [selectedSemester]);
 
   const filteredCourses = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return courses.filter((course) => {
-      const folder = course.folderId ? foldersById.get(course.folderId) : null;
-      const matchesQuery =
-        !q ||
-        course.name.toLowerCase().includes(q) ||
-        course.assignments.some((a) => a.title.toLowerCase().includes(q)) ||
-        folder?.name.toLowerCase().includes(q);
+    return courses
+      .filter((course) => {
+      const folder = course.folderId
+        ? foldersById.get(course.folderId) ?? null
+        : null;
+      const matchesQuery = smartSearchMatch(
+        [
+          course.name,
+          folderDisplayName(folder),
+          folder?.name,
+          folder?.year,
+          ...course.assignments.map((a) => a.title),
+        ],
+        query
+      );
       const matchesSemester =
         semesterFilter === "unfiled"
           ? !course.folderId
@@ -3405,6 +3446,12 @@ function Dashboard({
           ? true
           : folder?.year === yearFilter;
       return matchesQuery && matchesSemester;
+    })
+    .sort((a, b) => {
+      const folderDelta =
+        courseChronology(a, foldersById) - courseChronology(b, foldersById);
+      if (folderDelta !== 0) return folderDelta;
+      return a.name.localeCompare(b.name, undefined, { numeric: true });
     });
   }, [courses, foldersById, semesterFilter, yearFilter, query]);
 
@@ -3456,14 +3503,9 @@ function Dashboard({
               </Button>
             ) : (
               <div className="inline-flex min-h-9 items-center gap-2 rounded-md border border-slate-200 bg-white/75 px-3 py-2 text-sm font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-300">
-                <LockKeyhole className="h-4 w-4" />
-                4 years locked in
+                University structure
               </div>
             )}
-            <Button onClick={() => onAddCourse(defaultCourseSemesterId)}>
-              <Plus className="h-4 w-4" />
-              Course
-            </Button>
           </div>
         </div>
       </section>
@@ -3540,8 +3582,7 @@ function Dashboard({
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-white/75 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-600 shadow-sm">
-                  <LockKeyhole className="h-3.5 w-3.5" />
-                  Locked university structure
+                  University structure
                 </div>
                 <p className="mt-2 text-sm text-slate-500">
                   Pick a year and semester, then add courses inside it.
@@ -3593,7 +3634,6 @@ function Dashboard({
                         >
                           <span className="h-2.5 w-2.5 rounded-full bg-[var(--semester-color)]" />
                           <span>{term}</span>
-                          <LockKeyhole className="ml-auto h-3.5 w-3.5 opacity-55" />
                         </button>
                       );
                     })}
@@ -3670,10 +3710,7 @@ function Dashboard({
                   <span className="font-semibold">
                     {selectedSemester.year} / {selectedSemester.name}
                   </span>
-                  <Badge intent="info">
-                    <LockKeyhole className="mr-1 h-3 w-3" />
-                    Locked
-                  </Badge>
+                  <Badge intent="info">University term</Badge>
                   <Badge>
                     {filteredCourses.length}{" "}
                     {filteredCourses.length === 1 ? "course" : "courses"}
@@ -3787,8 +3824,7 @@ function Dashboard({
             </Button>
           ) : (
             <div className="hidden items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-500 dark:border-slate-800 dark:bg-slate-900 md:inline-flex">
-              <LockKeyhole className="h-4 w-4" />
-              Semesters locked
+              University semesters
             </div>
           )}
           <Button onClick={() => onAddCourse(defaultCourseSemesterId)}>
@@ -4330,7 +4366,12 @@ function AssignmentRow({
           value={a.grade}
           kind="grade"
           placeholder="43/50"
-          onCommit={(value) => onChange({ grade: value })}
+          onCommit={(value) =>
+            onChange({
+              grade: value,
+              status: value == null ? a.status : "completed",
+            })
+          }
         />
       </div>
       )}
@@ -4456,10 +4497,9 @@ function CourseDetail({
   }, [passMode, passSelectedIds, passTargetNumber, course]);
 
   const visibleAssignments = useMemo(() => {
-    const q = query.trim().toLowerCase();
     return course.assignments
       .filter((a) => {
-        const matchesQuery = !q || a.title.toLowerCase().includes(q);
+        const matchesQuery = smartSearchMatch([a.title, course.name], query);
         const matchesStatus = statusFilter === "all" || a.status === statusFilter;
         return matchesQuery && matchesStatus;
       })
@@ -5294,7 +5334,7 @@ function WelcomeHome({
         <div className="grid gap-8 lg:grid-cols-[1fr_0.86fr] lg:items-center">
           <div>
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/70 px-3 py-1 text-xs font-semibold text-slate-600 shadow-sm dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-300">
-              <Sparkles className="h-3.5 w-3.5 text-sky-500" />
+              <MarkMateLogo size="xs" />
               Choose your MarkMate setup
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
@@ -5308,10 +5348,6 @@ function WelcomeHome({
               celebrate wins. Add courses, sort them by semester, and let the
               rings keep score.
             </p>
-            <div className="mt-6 inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white/70 px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-300">
-              <ChevronDown className="h-4 w-4" />
-              Choose one setup path below
-            </div>
             <div className="mt-6 grid gap-3 text-sm sm:grid-cols-3">
               <div className="home-feature rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
                 <div className="font-semibold">Plan</div>
@@ -5365,6 +5401,15 @@ function WelcomeHome({
           className={`mode-card mode-card-university rounded-lg border p-5 ${
             appMode === "university" ? "mode-card-active" : ""
           }`}
+          role="button"
+          tabIndex={0}
+          onClick={onChooseUniversity}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              onChooseUniversity();
+            }
+          }}
           style={
             {
               "--mode-primary": selectedUniversityTheme.primaryColor,
@@ -5376,7 +5421,7 @@ function WelcomeHome({
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-white/75 px-3 py-1 text-xs font-bold text-slate-700 shadow-sm">
-                <BookOpen className="h-3.5 w-3.5" />
+                <MarkMateLogo size="xs" />
                 University mode
               </div>
               <h2 className="mt-4 text-2xl font-black tracking-tight">
@@ -5393,6 +5438,7 @@ function WelcomeHome({
               <SelectBox
                 value={selectedUniversityTheme.id}
                 onChange={(value) => setUniversityTheme(value as UniversityThemeId)}
+                onClick={(event) => event.stopPropagation()}
                 className="bg-white/80"
               >
                 {REAL_UNIVERSITY_THEME_OPTIONS.map((theme) => (
@@ -5402,15 +5448,6 @@ function WelcomeHome({
                 ))}
               </SelectBox>
             </div>
-          </div>
-          <div className="mt-5 grid grid-cols-3 gap-2 text-xs font-semibold text-slate-600 sm:grid-cols-6">
-            {["Y1 Fall", "Y1 Winter", "Y1 Summer", "Y2 Fall", "Y3 Winter", "Y4 Summer"].map(
-              (label) => (
-                <span key={label} className="rounded-md bg-white/72 px-2 py-2 text-center shadow-sm">
-                  {label}
-                </span>
-              )
-            )}
           </div>
           <Button onClick={onChooseUniversity} className="mt-5">
             <Rocket className="h-4 w-4" />
@@ -5422,6 +5459,15 @@ function WelcomeHome({
           className={`mode-card mode-card-custom rounded-lg border p-5 ${
             appMode === "custom" ? "mode-card-active" : ""
           }`}
+          role="button"
+          tabIndex={0}
+          onClick={onChooseCustom}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              onChooseCustom();
+            }
+          }}
           style={
             {
               "--mode-primary": selectedCustomTheme.primaryColor,
@@ -5450,6 +5496,7 @@ function WelcomeHome({
               <SelectBox
                 value={customThemeId}
                 onChange={(value) => setCustomTheme(value as CustomThemeId)}
+                onClick={(event) => event.stopPropagation()}
                 className="bg-white/80"
               >
                 {CUSTOM_THEME_OPTIONS.map((theme) => (
@@ -5477,7 +5524,10 @@ function WelcomeHome({
                     "--mode-accent": theme.accentColor,
                   } as React.CSSProperties
                 }
-                onClick={() => setCustomTheme(theme.id)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setCustomTheme(theme.id);
+                }}
                 title={theme.label}
               />
             ))}
@@ -5500,6 +5550,7 @@ export default function DesktopApp() {
   const [addFolderOpen, setAddFolderOpen] = useState(false);
   const [defaultFolderId, setDefaultFolderId] = useState<string | null>(null);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const [lastViewedFolderId, setLastViewedFolderId] = useState<string | null>(null);
   const [showHome, setShowHome] = useState(true);
   const [tab, setTab] = useState<"dashboard" | "calendar">("dashboard");
   const courses = useCourseStore((s) => s.courses);
@@ -5588,13 +5639,13 @@ export default function DesktopApp() {
         customThemeId={customThemeId}
         setCustomTheme={setCustomTheme}
       />
-      {!showHome && <ExportImportBar />}
       <CelebrationCenter />
 
       {selectedCourse ? (
         <CourseDetail
           course={selectedCourse}
           onBack={() => {
+            setLastViewedFolderId(selectedCourse.folderId ?? null);
             setSelectedCourseId(null);
             setShowHome(false);
           }}
@@ -5612,6 +5663,8 @@ export default function DesktopApp() {
       ) : tab === "calendar" ? (
         <CalendarPanel
           onOpenCourse={(courseId) => {
+            const course = courses.find((item) => item.id === courseId);
+            setLastViewedFolderId(course?.folderId ?? null);
             setSelectedCourseId(courseId);
             setShowHome(false);
             setTab("dashboard");
@@ -5621,10 +5674,13 @@ export default function DesktopApp() {
         <Dashboard
           onOpenCourse={(courseId) => {
             setShowHome(false);
+            const course = courses.find((item) => item.id === courseId);
+            setLastViewedFolderId(course?.folderId ?? null);
             setSelectedCourseId(courseId);
           }}
           onAddCourse={openAddCourse}
           onAddFolder={() => setAddFolderOpen(true)}
+          focusFolderId={lastViewedFolderId}
         />
       )}
 
@@ -5632,6 +5688,15 @@ export default function DesktopApp() {
         open={addCourseOpen}
         onClose={() => setAddCourseOpen(false)}
         defaultFolderId={defaultFolderId}
+        onCreated={(courseId) => {
+          const course = useCourseStore
+            .getState()
+            .courses.find((item) => item.id === courseId);
+          setLastViewedFolderId(course?.folderId ?? null);
+          setShowHome(false);
+          setTab("dashboard");
+          setSelectedCourseId(courseId);
+        }}
       />
       <AddSemesterModal
         open={addFolderOpen}

@@ -279,16 +279,7 @@ textarea {
 }
 
 .dashboard-hero::after {
-  position: absolute;
-  inset: 0;
-  content: "";
-  pointer-events: none;
-  z-index: 0;
-  background-image:
-    linear-gradient(rgba(15, 23, 42, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(15, 23, 42, 0.08) 1px, transparent 1px);
-  background-size: 34px 34px;
-  mask-image: linear-gradient(90deg, transparent, black 20%, black 80%, transparent);
+  display: none;
 }
 
 .dashboard-hero::before {
@@ -298,12 +289,11 @@ textarea {
   pointer-events: none;
   z-index: 0;
   background-image:
-    linear-gradient(90deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.48) 52%, rgba(255, 255, 255, 0.72)),
-    linear-gradient(rgba(15, 23, 42, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(15, 23, 42, 0.08) 1px, transparent 1px);
-  background-position: center, center, center;
+    radial-gradient(circle at 76% 18%, rgba(255, 255, 255, 0.66), transparent 14rem),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.52) 56%, rgba(255, 255, 255, 0.78));
+  background-position: center, center;
   background-repeat: no-repeat;
-  background-size: cover, 34px 34px, 34px 34px;
+  background-size: auto, cover;
   opacity: 0.78;
   filter: none;
 }
@@ -315,10 +305,8 @@ textarea {
 
 .app-shell[data-app-mode="custom"] .dashboard-hero::before {
   background-image:
-    radial-gradient(circle at 74% 24%, color-mix(in srgb, var(--theme-accent) 18%, transparent), transparent 10rem),
-    linear-gradient(90deg, transparent 0 31px, rgba(15, 23, 42, 0.04) 32px),
-    linear-gradient(180deg, transparent 0 31px, rgba(15, 23, 42, 0.04) 32px);
-  background-size: auto, 32px 32px, 32px 32px;
+    radial-gradient(circle at 74% 24%, color-mix(in srgb, var(--theme-accent) 18%, transparent), transparent 10rem);
+  background-size: auto;
   opacity: 0.58;
   filter: none;
 }
@@ -714,20 +702,7 @@ textarea {
 }
 
 .university-semester-locker::after {
-  position: absolute;
-  inset: 0;
-  content: "";
-  pointer-events: none;
-  background-image:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.5)),
-    linear-gradient(90deg, transparent 0 31px, rgba(15, 23, 42, 0.035) 32px),
-    linear-gradient(180deg, transparent 0 31px, rgba(15, 23, 42, 0.035) 32px);
-  background-position: center, center, center;
-  background-repeat: no-repeat;
-  background-size: cover, 32px 32px, 32px 32px;
-  opacity: 0.68;
-  filter: none;
-  mask-image: none;
+  display: none;
 }
 
 .university-semester-locker > * {
