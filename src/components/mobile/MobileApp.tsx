@@ -320,6 +320,157 @@ function MobileMetric({
   );
 }
 
+function courseWeightStatus(totalWeights: number) {
+  if (Math.abs(totalWeights - 100) <= 0.01) {
+    return {
+      label: "Weights add to 100%",
+      detail: "Ready for GPA and pass planning",
+      tone: "good" as const,
+    };
+  }
+  if (totalWeights > 100) {
+    return {
+      label: `Over by ${formatPercent(totalWeights - 100)}`,
+      detail: "Lower one weight before final GPA",
+      tone: "bad" as const,
+    };
+  }
+  return {
+    label:
+      totalWeights <= 0
+        ? "Add assignment weights"
+        : `Missing ${formatPercent(100 - totalWeights)}`,
+    detail: "Course tools unlock fully at 100%",
+    tone: "warn" as const,
+  };
+}
+
+function MobileProgressRing({
+  value,
+  label,
+  detail,
+  color = "var(--theme-primary)",
+  tone = "neutral",
+}: {
+  value: number | null;
+  label: string;
+  detail: string;
+  color?: string;
+  tone?: "neutral" | "good" | "warn" | "bad";
+}) {
+  const radius = 34;
+  const circumference = 2 * Math.PI * radius;
+  const progress = clampPercent(value ?? 0);
+  const ringColor =
+    tone === "good"
+      ? "#16a34a"
+      : tone === "warn"
+      ? "#d97706"
+      : tone === "bad"
+      ? "#e11d48"
+      : color;
+
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-3">
+      <div className="flex items-center gap-3">
+        <div className="relative grid h-[84px] w-[84px] shrink-0 place-items-center">
+          <svg className="-rotate-90" width="84" height="84" viewBox="0 0 84 84">
+            <circle
+              cx="42"
+              cy="42"
+              r={radius}
+              fill="none"
+              stroke="#e2e8f0"
+              strokeWidth="8"
+            />
+            <circle
+              cx="42"
+              cy="42"
+              r={radius}
+              fill="none"
+              stroke={ringColor}
+              strokeLinecap="round"
+              strokeWidth="8"
+              strokeDasharray={circumference}
+              strokeDashoffset={circumference - (progress / 100) * circumference}
+            />
+          </svg>
+          <span className="absolute text-lg font-black tabular-nums text-slate-950">
+            {value == null ? "--" : `${Math.round(value)}%`}
+          </span>
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+            {label}
+          </p>
+          <p className="mt-1 text-base font-black leading-snug text-slate-950">
+            {detail}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MobileCourseProgressPanel({
+  course,
+  metrics,
+}: {
+  course: Course;
+  metrics: ReturnType<typeof calcMetrics>;
+}) {
+  const weightStatus = courseWeightStatus(metrics.totalWeights);
+  const completeAssignments = course.assignments.filter(
+    (assignment) => assignment.status === "completed"
+  ).length;
+
+  return (
+    <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+            Course progress
+          </p>
+          <h2 className="mt-1 text-xl font-black tracking-tight">
+            Rings and weights
+          </h2>
+        </div>
+        <span
+          className={`rounded-full px-3 py-1 text-xs font-black ${
+            weightStatus.tone === "good"
+              ? "bg-emerald-50 text-emerald-700"
+              : weightStatus.tone === "bad"
+              ? "bg-rose-50 text-rose-700"
+              : "bg-amber-50 text-amber-800"
+          }`}
+        >
+          {weightStatus.label}
+        </span>
+      </div>
+      <div className="grid gap-3">
+        <MobileProgressRing
+          label="Current"
+          value={metrics.gradeSoFar}
+          detail="Grade so far"
+          color={course.color ?? "var(--theme-primary)"}
+        />
+        <MobileProgressRing
+          label="Completed"
+          value={metrics.displayCompleted}
+          detail={`${completeAssignments}/${course.assignments.length} assignments done`}
+          color={course.color ?? "var(--theme-primary)"}
+        />
+        <MobileProgressRing
+          label="Weights"
+          value={metrics.totalWeights}
+          detail={weightStatus.detail}
+          tone={weightStatus.tone}
+        />
+      </div>
+    </section>
+  );
+}
+
 function MobileGpaHero({
   report,
   onOpenGpa,
@@ -410,6 +561,96 @@ function EmptyCourses({ onAddCourse }: { onAddCourse: () => void }) {
   );
 }
 
+function MobileIdentityCard({
+  courseCount,
+  semesterCount,
+  onGoCourses,
+  onGoCalendar,
+}: {
+  courseCount: number;
+  semesterCount: number;
+  onGoCourses: () => void;
+  onGoCalendar: () => void;
+}) {
+  const appMode = useCourseStore((state) => state.appMode ?? "custom");
+  const setAppMode = useCourseStore((state) => state.setAppMode);
+  const universityThemeId = useCourseStore(
+    (state) => state.universityThemeId ?? "uoft"
+  );
+  const customThemeId = useCourseStore((state) => state.customThemeId ?? "classic");
+  const activeTheme = getActiveTheme(appMode, universityThemeId, customThemeId);
+  const imageLayer = activeTheme.backgroundImage
+    ? `linear-gradient(90deg, rgba(15,23,42,0.86), rgba(15,23,42,0.46)), url(${activeTheme.backgroundImage})`
+    : "linear-gradient(135deg, #020617, #0f172a 62%, #1e293b)";
+
+  return (
+    <section
+      className="relative overflow-hidden rounded-[2rem] border border-white/70 bg-slate-950 p-4 text-white shadow-[0_24px_64px_-36px_rgba(15,23,42,0.72)]"
+      style={{
+        backgroundImage: imageLayer,
+        backgroundPosition: activeTheme.position ?? "center",
+        backgroundSize: "cover",
+      }}
+    >
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.12),transparent_52%,rgba(2,6,23,0.28))]" />
+      <div className="relative">
+        <div className="flex items-start gap-4">
+          <MarkMateLogo size="lg" className="ring-white/35" />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-white/60">
+              MarkMate
+            </p>
+            <h1 className="mt-1 truncate text-2xl font-black tracking-tight">
+              {activeTheme.label}
+            </h1>
+            <p className="mt-1 text-sm font-semibold leading-snug text-white/70">
+              {courseCount} courses / {semesterCount} semesters
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid grid-cols-2 gap-2 rounded-3xl border border-white/20 bg-white/10 p-1.5 backdrop-blur">
+          {[
+            { id: "custom", label: "Custom" },
+            { id: "university", label: "University" },
+          ].map((option) => {
+            const active = appMode === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                className={`min-h-11 rounded-2xl text-sm font-black active:scale-[0.98] ${
+                  active ? "bg-white text-slate-950" : "text-white/70"
+                }`}
+                onClick={() => setAppMode(option.id as "custom" | "university")}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            className="min-h-11 rounded-2xl border border-white/20 bg-white/10 px-3 text-sm font-black text-white backdrop-blur active:scale-[0.98]"
+            onClick={onGoCourses}
+          >
+            Courses
+          </button>
+          <button
+            type="button"
+            className="min-h-11 rounded-2xl border border-white/20 bg-white/10 px-3 text-sm font-black text-white backdrop-blur active:scale-[0.98]"
+            onClick={onGoCalendar}
+          >
+            Calendar
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function MobileDashboard({
   onOpenGpa,
   onGoCourses,
@@ -425,7 +666,6 @@ function MobileDashboard({
 }) {
   const courses = useCourseStore((state) => state.courses);
   const folders = useCourseStore((state) => state.folders);
-  const appMode = useCourseStore((state) => state.appMode ?? "custom");
   const report = useGpaReport();
   const foldersById = useMemo(
     () =>
@@ -454,6 +694,12 @@ function MobileDashboard({
 
   return (
     <div className="space-y-4">
+      <MobileIdentityCard
+        courseCount={courses.length}
+        semesterCount={folders.length}
+        onGoCourses={onGoCourses}
+        onGoCalendar={onGoCalendar}
+      />
       <MobileGpaHero report={report} onOpenGpa={onOpenGpa} />
 
       <div className="grid grid-cols-3 gap-2">
@@ -479,31 +725,6 @@ function MobileDashboard({
           GPA
         </button>
       </div>
-
-      <section className="grid grid-cols-2 gap-3 rounded-[1.75rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
-        <div className="rounded-2xl bg-slate-50 px-4 py-3">
-          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-            Courses
-          </p>
-          <p className="mt-1 text-2xl font-black tabular-nums text-slate-950">
-            {courses.length}
-          </p>
-          <p className="text-sm font-semibold text-slate-500">
-            {folders.length} semesters
-          </p>
-        </div>
-        <div className="rounded-2xl bg-slate-950 px-4 py-3 text-white">
-          <p className="text-xs font-black uppercase tracking-wide text-white/55">
-            Mode
-          </p>
-          <p className="mt-1 text-2xl font-black text-white">
-            {appMode === "university" ? "Uni" : "Custom"}
-          </p>
-          <p className="text-sm font-semibold text-white/55">
-            {appMode === "university" ? "School rules" : "Flexible"}
-          </p>
-        </div>
-      </section>
 
       {courses.length === 0 ? (
         <EmptyCourses onAddCourse={onAddCourse} />
@@ -1195,18 +1416,7 @@ function MobileCourseDetail({
         </div>
       </header>
 
-      <section className="grid grid-cols-2 gap-3">
-        <MobileMetric
-          label="Current"
-          value={formatPercent(metrics.gradeSoFar)}
-          detail="Grade so far"
-        />
-        <MobileMetric
-          label="Progress"
-          value={`${Math.round(metrics.displayCompleted)}%`}
-          detail="Weight entered"
-        />
-      </section>
+      <MobileCourseProgressPanel course={course} metrics={metrics} />
 
       <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
         <div className="mb-4 flex items-center justify-between gap-4">
@@ -1531,6 +1741,7 @@ function MobileCalendar({
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedDate, setSelectedDate] = useState(todayIso);
+  const [filter, setFilter] = useState("all");
   const [quickOpen, setQuickOpen] = useState(false);
   const foldersById = useMemo(
     () =>
@@ -1539,7 +1750,18 @@ function MobileCalendar({
       ),
     [folders]
   );
-  const items = useMemo<CalendarItem[]>(
+  const calendarScopes = useMemo(
+    () => [
+      { id: "all", label: "All" },
+      { id: "unfiled", label: "Unfiled" },
+      ...folders.map((folder) => ({
+        id: folder.id,
+        label: folderDisplayName(folder),
+      })),
+    ],
+    [folders]
+  );
+  const allItems = useMemo<CalendarItem[]>(
     () =>
       courses
         .flatMap((course) =>
@@ -1555,6 +1777,17 @@ function MobileCalendar({
         )
         .sort((a, b) => assignmentSort(a.assignment, b.assignment)),
     [courses, foldersById]
+  );
+  const items = useMemo(
+    () =>
+      allItems.filter((item) =>
+        filter === "all"
+          ? true
+          : filter === "unfiled"
+          ? !item.course.folderId
+          : item.course.folderId === filter
+      ),
+    [allItems, filter]
   );
   const itemsByDate = useMemo(() => {
     const map = new Map<string, CalendarItem[]>();
@@ -1629,6 +1862,25 @@ function MobileCalendar({
           >
             <ChevronRight className="h-5 w-5" />
           </button>
+        </div>
+        <div className="-mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
+          {calendarScopes.map((scope) => {
+            const active = filter === scope.id;
+            return (
+              <button
+                key={scope.id}
+                type="button"
+                className={`min-h-11 shrink-0 rounded-2xl px-4 text-base font-black ${
+                  active
+                    ? "bg-slate-950 text-white"
+                    : "border border-slate-200 bg-white text-slate-600"
+                }`}
+                onClick={() => setFilter(scope.id)}
+              >
+                {scope.label}
+              </button>
+            );
+          })}
         </div>
         <div className="mt-4 grid grid-cols-7 gap-1 text-center text-xs font-black uppercase tracking-wide text-slate-400">
           {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
@@ -2285,6 +2537,8 @@ export default function MobileApp() {
   const [courseCreateOpen, setCourseCreateOpen] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const appMode = useCourseStore((state) => state.appMode ?? "custom");
+  const folders = useCourseStore((state) => state.folders);
+  const setAppMode = useCourseStore((state) => state.setAppMode);
   const universityThemeId = useCourseStore(
     (state) => state.universityThemeId ?? "uoft"
   );
@@ -2299,6 +2553,22 @@ export default function MobileApp() {
     setActiveTab("courses");
     setSelectedCourseId(courseId);
   };
+
+  const hasUniversitySemesterLayout = useMemo(
+    () =>
+      semesterYears.every((year) =>
+        semesterTerms.every((term) =>
+          folders.some((folder) => folder.year === year && folder.name === term)
+        )
+      ),
+    [folders]
+  );
+
+  useEffect(() => {
+    if (appMode === "university" && !hasUniversitySemesterLayout) {
+      setAppMode("university");
+    }
+  }, [appMode, hasUniversitySemesterLayout, setAppMode]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });

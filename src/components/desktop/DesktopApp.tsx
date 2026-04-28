@@ -4977,17 +4977,21 @@ function CalendarPanel({
   );
 
   const calendarItems = useMemo(() => {
-    const q = query.trim().toLowerCase();
     return courses.flatMap((course) => {
-      const folder = course.folderId ? foldersById.get(course.folderId) : null;
+      const folder = course.folderId ? foldersById.get(course.folderId) ?? null : null;
       return course.assignments
         .filter((assignment) => assignment.dueDate)
         .filter((assignment) => {
-          const matchesQuery =
-            !q ||
-            assignment.title.toLowerCase().includes(q) ||
-            course.name.toLowerCase().includes(q) ||
-            folder?.name.toLowerCase().includes(q);
+          const matchesQuery = smartSearchMatch(
+            [
+              assignment.title,
+              course.name,
+              folderDisplayName(folder),
+              folder?.name,
+              folder?.year,
+            ],
+            query
+          );
           const matchesFolder =
             folderFilter === "all" ||
             (folderFilter === "unfiled" && !course.folderId) ||
@@ -5055,6 +5059,33 @@ function CalendarPanel({
     return { course, assignment, folder };
   }, [courses, foldersById, selectedAssignment]);
 
+  const semesterOptions = useMemo(() => {
+    const datedCount = (courseList: Course[]) =>
+      courseList.reduce(
+        (sum, course) =>
+          sum + course.assignments.filter((assignment) => assignment.dueDate).length,
+        0
+      );
+    return [
+      { id: "all", label: "All deadlines", count: datedCount(courses) },
+      {
+        id: "unfiled",
+        label: "No semester",
+        count: datedCount(courses.filter((course) => !course.folderId)),
+      },
+      ...folders.map((folder) => ({
+        id: folder.id,
+        label: folderDisplayName(folder),
+        count: datedCount(courses.filter((course) => course.folderId === folder.id)),
+        color: folder.color,
+      })),
+    ];
+  }, [courses, folders]);
+
+  const activeSemesterLabel =
+    semesterOptions.find((option) => option.id === folderFilter)?.label ??
+    "All deadlines";
+
   const defaultQuickCourse =
     folderFilter !== "all" && folderFilter !== "unfiled"
       ? courses.find((course) => course.folderId === folderFilter)?.id ?? null
@@ -5078,47 +5109,102 @@ function CalendarPanel({
   return (
     <main className="mx-auto max-w-7xl space-y-4 px-4 py-5">
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-soft dark:border-slate-800 dark:bg-slate-950">
-        <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px_180px]">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search calendar"
-              className="pl-9"
+              placeholder="Search deadlines, courses, or semesters"
+              className="pl-9 lg:w-[22rem]"
             />
           </div>
+          <div className="flex flex-1 flex-wrap items-center gap-2">
+            {[
+              { id: "all", label: "All" },
+              { id: "overdue", label: "Overdue" },
+              { id: "not_started", label: "To do" },
+              { id: "in_progress", label: "Started" },
+              { id: "completed", label: "Done" },
+            ].map((option) => {
+              const active = statusFilter === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={`min-h-10 rounded-full border px-3 text-sm font-bold transition ${
+                    active
+                      ? "border-slate-950 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
+                  }`}
+                  onClick={() =>
+                    setStatusFilter(option.id as "all" | AssignmentStatus)
+                  }
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
           <SelectBox
-            value={folderFilter}
-            onChange={(value) => setFolderFilter(value as FolderFilter)}
+            value={theme}
+            onChange={(v) => setTheme(v as CalendarTheme)}
+            className="lg:w-44"
           >
-            <option value="all">All semesters</option>
-            <option value="unfiled">No semester</option>
-            {folders.map((folder) => (
-              <option key={folder.id} value={folder.id}>
-                {folder.name}
-              </option>
-            ))}
-          </SelectBox>
-          <SelectBox
-            value={statusFilter}
-            onChange={(value) => setStatusFilter(value as "all" | AssignmentStatus)}
-          >
-            <option value="all">All statuses</option>
-            {Object.entries(STATUS_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </SelectBox>
-          <SelectBox value={theme} onChange={(v) => setTheme(v as CalendarTheme)}>
-            <option value="system">System</option>
+            <option value="system">System style</option>
             <option value="pastel">Pastel</option>
             <option value="highContrast">High Contrast</option>
             <option value="minimal">Minimal</option>
             <option value="academic">Academic</option>
             <option value="deadline">Deadline</option>
           </SelectBox>
+        </div>
+        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900/60">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                Semester focus
+              </div>
+              <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                Showing {activeSemesterLabel}
+              </div>
+            </div>
+            <Badge>{calendarItems.length} visible</Badge>
+          </div>
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+            {semesterOptions.map((option) => {
+              const active = folderFilter === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border px-3 text-sm font-bold transition ${
+                    active
+                      ? "border-slate-950 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
+                  }`}
+                  onClick={() => setFolderFilter(option.id as FolderFilter)}
+                >
+                  {"color" in option && option.color && (
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: option.color }}
+                    />
+                  )}
+                  {option.label}
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs ${
+                      active
+                        ? "bg-white/20 text-white dark:bg-slate-950/10 dark:text-slate-700"
+                        : "bg-slate-100 text-slate-500 dark:bg-slate-900 dark:text-slate-400"
+                    }`}
+                  >
+                    {option.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -5339,7 +5425,7 @@ function WelcomeHome({
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
               Welcome to{" "}
-              <span className="bg-gradient-to-r from-pink-500 via-rose-400 to-emerald-500 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-slate-950 via-sky-700 to-slate-700 bg-clip-text text-transparent">
                 MarkMate
               </span>
             </h1>
@@ -5370,7 +5456,7 @@ function WelcomeHome({
             </div>
           </div>
           <div className="w-full space-y-4">
-            <div className="home-preview-card rounded-lg border border-slate-200 bg-gradient-to-br from-pink-50 via-rose-50 to-emerald-50 p-6 dark:border-slate-800 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900">
+            <div className="home-preview-card rounded-lg border border-slate-200 bg-gradient-to-br from-slate-50 via-sky-50 to-white p-6 dark:border-slate-800 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900">
               <div className="flex items-center gap-4">
                 <Donut value={72} size={106} label="Ready" />
                 <div className="min-w-0">
