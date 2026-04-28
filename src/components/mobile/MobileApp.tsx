@@ -3,17 +3,22 @@ import {
   ArrowLeft,
   BookOpen,
   CalendarDays,
+  Check,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   CircleHelp,
   ClipboardList,
+  Edit3,
   Gauge,
   GraduationCap,
   LayoutDashboard,
+  ListChecks,
   Plus,
   Search,
   Settings,
   Sparkles,
+  Target,
   Trash2,
   X,
 } from "lucide-react";
@@ -22,14 +27,20 @@ import {
   averageDetail,
   buildCourseGradeRecords,
   calcMetrics,
+  calculatePassPlan,
   courseChronology,
-  formatCredits,
   folderDisplayName,
+  formatCredits,
+  formatGradeRange,
+  formatScaleValue,
   formatSchoolAverage,
   getActiveTheme,
   gpaSessionRows,
   gpaWaitingCourseCount,
   gpaYearRows,
+  normalizeWeightToPercent,
+  parseFlexibleNumber,
+  parseGradeInput,
   selectedUniversityId,
   smartSearchMatch,
   useCourseStore,
@@ -37,6 +48,7 @@ import {
   type AssignmentStatus,
   type Course,
   type CourseFolder,
+  type PassPlanResult,
 } from "../desktop/DesktopApp";
 import { MarkMateLogo } from "../MarkMateLogo";
 import {
@@ -46,15 +58,16 @@ import {
   type UniversityGpaReport,
 } from "../../lib/gpa";
 
-type MobileTab = "dashboard" | "courses" | "gpa" | "settings";
+type MobileTab = "dashboard" | "courses" | "calendar" | "gpa" | "settings";
 
 const mobileTabs: Array<{
   id: MobileTab;
   label: string;
   icon: typeof LayoutDashboard;
 }> = [
-  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "dashboard", label: "Home", icon: LayoutDashboard },
   { id: "courses", label: "Courses", icon: BookOpen },
+  { id: "calendar", label: "Calendar", icon: CalendarDays },
   { id: "gpa", label: "GPA", icon: Gauge },
   { id: "settings", label: "Settings", icon: Settings },
 ];
@@ -94,6 +107,19 @@ const statusOptions: Array<{ id: AssignmentStatus; label: string }> = [
   { id: "overdue", label: "Overdue" },
 ];
 
+const semesterYears = ["Year 1", "Year 2", "Year 3", "Year 4"] as const;
+const semesterTerms = ["Fall", "Winter", "Summer"] as const;
+const semesterColors = [
+  "#0f766e",
+  "#2563eb",
+  "#7c3aed",
+  "#be123c",
+  "#c2410c",
+  "#4d7c0f",
+  "#0369a1",
+  "#52525b",
+] as const;
+
 function useGpaReport() {
   const courses = useCourseStore((state) => state.courses);
   const folders = useCourseStore((state) => state.folders);
@@ -132,12 +158,70 @@ function formatPercent(value: number | null | undefined) {
   return `${Number(value.toFixed(1)).toString()}%`;
 }
 
-function assignmentDueLabel(assignment: Assignment) {
-  if (!assignment.dueDate) return "No date";
+function formatShortDate(dateISO: string | null | undefined) {
+  if (!dateISO) return "No date";
   return new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "numeric",
-  }).format(new Date(`${assignment.dueDate}T00:00:00`));
+  }).format(new Date(`${dateISO}T00:00:00`));
+}
+
+function formatLongDate(dateISO: string | null | undefined) {
+  if (!dateISO) return "No date";
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(new Date(`${dateISO}T00:00:00`));
+}
+
+function todayIso() {
+  const now = new Date();
+  return toIsoDate(now);
+}
+
+function toIsoDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function monthTitle(date: Date) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
+
+function statusLabel(status: AssignmentStatus) {
+  return statusOptions.find((option) => option.id === status)?.label ?? status;
+}
+
+function statusClasses(status: AssignmentStatus) {
+  if (status === "completed") return "bg-emerald-50 text-emerald-700";
+  if (status === "overdue") return "bg-rose-50 text-rose-700";
+  if (status === "in_progress") return "bg-sky-50 text-sky-700";
+  return "bg-slate-100 text-slate-600";
+}
+
+function clampPercent(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, value));
+}
+
+function courseSort(
+  a: Course,
+  b: Course,
+  foldersById: Map<string, CourseFolder>
+) {
+  const folderDelta = courseChronology(a, foldersById) - courseChronology(b, foldersById);
+  if (folderDelta !== 0) return folderDelta;
+  return a.name.localeCompare(b.name, undefined, { numeric: true });
+}
+
+function assignmentSort(a: Assignment, b: Assignment) {
+  return (a.dueDate ?? "9999-12-31").localeCompare(b.dueDate ?? "9999-12-31");
 }
 
 function MobileBottomSheet({
@@ -155,7 +239,7 @@ function MobileBottomSheet({
 
   return (
     <div
-      className="fixed inset-0 z-40 bg-slate-950/35"
+      className="fixed inset-0 z-40 overscroll-none bg-slate-950/35"
       role="presentation"
       style={{ position: "fixed", zIndex: 40 }}
     >
@@ -166,7 +250,7 @@ function MobileBottomSheet({
         onClick={onClose}
       />
       <section
-        className="absolute inset-x-0 bottom-0 max-h-[94dvh] overflow-y-auto rounded-t-[2rem] border border-white/70 bg-white px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-4 shadow-2xl"
+        className="absolute inset-x-0 bottom-0 max-h-[94dvh] overflow-y-auto overscroll-contain rounded-t-[2rem] border border-white/70 bg-white px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-4 shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -191,6 +275,27 @@ function MobileBottomSheet({
   );
 }
 
+function MobileField({
+  label,
+  children,
+  hint,
+  error,
+}: {
+  label: string;
+  children: React.ReactNode;
+  hint?: string;
+  error?: string;
+}) {
+  return (
+    <label className="block text-base font-bold text-slate-700">
+      {label}
+      <div className="mt-2">{children}</div>
+      {hint && <p className="mt-1 text-sm font-semibold text-slate-400">{hint}</p>}
+      {error && <p className="mt-1 text-sm font-bold text-rose-600">{error}</p>}
+    </label>
+  );
+}
+
 function MobileMetric({
   label,
   value,
@@ -201,14 +306,16 @@ function MobileMetric({
   detail: string;
 }) {
   return (
-    <article className="rounded-3xl border border-white/70 bg-white/95 p-5 shadow-soft backdrop-blur">
+    <article className="rounded-3xl border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
       <p className="text-xs font-black uppercase tracking-wide text-slate-500">
         {label}
       </p>
-      <div className="mt-3 text-4xl font-black tabular-nums tracking-tight text-slate-950">
+      <div className="mt-2 text-3xl font-black tabular-nums tracking-tight text-slate-950">
         {value}
       </div>
-      <p className="mt-2 text-base leading-snug text-slate-500">{detail}</p>
+      <p className="mt-1 text-sm font-semibold leading-snug text-slate-500">
+        {detail}
+      </p>
     </article>
   );
 }
@@ -235,14 +342,14 @@ function MobileGpaHero({
             "linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary) 48%, var(--theme-accent) 100%)",
         }}
       />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.28),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.12),transparent)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.26),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.12),transparent)]" />
       <div className="relative">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.18em] text-white/70">
               GPA estimate
             </p>
-            <div className="mt-4 text-[3.5rem] font-black leading-none tracking-tight">
+            <div className="mt-3 text-[3.45rem] font-black leading-none tracking-tight">
               {formatSchoolAverage(report)}
             </div>
             <p className="mt-3 text-sm font-black uppercase tracking-[0.18em] text-white/75">
@@ -258,17 +365,17 @@ function MobileGpaHero({
             <CircleHelp className="h-5 w-5" />
           </button>
         </div>
-        <div className="mt-7 grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-white/20 bg-white/10 p-4 backdrop-blur">
-              <p className="text-xs font-bold uppercase tracking-wide text-white/60">
+        <div className="mt-6 grid grid-cols-2 gap-3">
+          <div className="rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur">
+            <p className="text-xs font-bold uppercase tracking-wide text-white/60">
               Included
             </p>
             <p className="mt-1 text-2xl font-black tabular-nums">
               {completeCourses}
             </p>
           </div>
-            <div className="rounded-2xl border border-white/20 bg-white/10 p-4 backdrop-blur">
-              <p className="text-xs font-bold uppercase tracking-wide text-white/60">
+          <div className="rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur">
+            <p className="text-xs font-bold uppercase tracking-wide text-white/60">
               Waiting
             </p>
             <p className="mt-1 text-2xl font-black tabular-nums">
@@ -289,7 +396,7 @@ function EmptyCourses({ onAddCourse }: { onAddCourse: () => void }) {
         Add your first course.
       </h2>
       <p className="mx-auto mt-2 max-w-xs text-base leading-relaxed text-slate-500">
-        Start with one class and MarkMate will keep the phone view calm.
+        Start with one class, then add assignments from the course page.
       </p>
       <button
         type="button"
@@ -306,18 +413,20 @@ function EmptyCourses({ onAddCourse }: { onAddCourse: () => void }) {
 function MobileDashboard({
   onOpenGpa,
   onGoCourses,
+  onGoCalendar,
+  onAddCourse,
   onOpenCourse,
 }: {
   onOpenGpa: () => void;
   onGoCourses: () => void;
+  onGoCalendar: () => void;
+  onAddCourse: () => void;
   onOpenCourse: (courseId: string) => void;
 }) {
   const courses = useCourseStore((state) => state.courses);
   const folders = useCourseStore((state) => state.folders);
   const appMode = useCourseStore((state) => state.appMode ?? "custom");
-  const addCourse = useCourseStore((state) => state.addCourse);
   const report = useGpaReport();
-  const defaultFolderId = folders[0]?.id ?? null;
   const foldersById = useMemo(
     () =>
       new Map<string, CourseFolder>(
@@ -332,81 +441,109 @@ function MobileDashboard({
           .filter((assignment) => assignment.status !== "completed")
           .map((assignment) => ({ course, assignment }))
       )
-      .sort((a, b) =>
-        (a.assignment.dueDate ?? "9999-12-31").localeCompare(
-          b.assignment.dueDate ?? "9999-12-31"
-        )
-      )[0];
+      .sort((a, b) => assignmentSort(a.assignment, b.assignment))[0];
   }, [courses]);
   const activeCourses = useMemo(
     () =>
       courses
         .slice()
-        .sort((a, b) => {
-          const folderDelta =
-            courseChronology(a, foldersById) - courseChronology(b, foldersById);
-          if (folderDelta !== 0) return folderDelta;
-          return a.name.localeCompare(b.name, undefined, { numeric: true });
-        })
+        .sort((a, b) => courseSort(a, b, foldersById))
         .slice(0, 3),
     [courses, foldersById]
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <MobileGpaHero report={report} onOpenGpa={onOpenGpa} />
 
-      <div className="grid grid-cols-2 gap-3">
-        <MobileMetric
-          label="Courses"
-          value={String(courses.length)}
-          detail={`${folders.length} semesters`}
-        />
-        <MobileMetric
-          label="Mode"
-          value={appMode === "university" ? "Uni" : "Custom"}
-          detail={appMode === "university" ? "School rules on" : "Flexible setup"}
-        />
+      <div className="grid grid-cols-3 gap-2">
+        <button
+          type="button"
+          className="min-h-12 rounded-2xl bg-slate-950 px-3 text-sm font-black text-white active:scale-[0.98]"
+          onClick={onAddCourse}
+        >
+          Add class
+        </button>
+        <button
+          type="button"
+          className="min-h-12 rounded-2xl border border-slate-200 bg-white/95 px-3 text-sm font-black text-slate-700 active:scale-[0.98]"
+          onClick={onGoCalendar}
+        >
+          Calendar
+        </button>
+        <button
+          type="button"
+          className="min-h-12 rounded-2xl border border-slate-200 bg-white/95 px-3 text-sm font-black text-slate-700 active:scale-[0.98]"
+          onClick={onOpenGpa}
+        >
+          GPA
+        </button>
       </div>
 
+      <section className="grid grid-cols-2 gap-3 rounded-[1.75rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
+        <div className="rounded-2xl bg-slate-50 px-4 py-3">
+          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+            Courses
+          </p>
+          <p className="mt-1 text-2xl font-black tabular-nums text-slate-950">
+            {courses.length}
+          </p>
+          <p className="text-sm font-semibold text-slate-500">
+            {folders.length} semesters
+          </p>
+        </div>
+        <div className="rounded-2xl bg-slate-950 px-4 py-3 text-white">
+          <p className="text-xs font-black uppercase tracking-wide text-white/55">
+            Mode
+          </p>
+          <p className="mt-1 text-2xl font-black text-white">
+            {appMode === "university" ? "Uni" : "Custom"}
+          </p>
+          <p className="text-sm font-semibold text-white/55">
+            {appMode === "university" ? "School rules" : "Flexible"}
+          </p>
+        </div>
+      </section>
+
       {courses.length === 0 ? (
-        <EmptyCourses
-          onAddCourse={() => {
-            const courseId = addCourse("New Course", defaultFolderId);
-            onOpenCourse(courseId);
-          }}
-        />
+        <EmptyCourses onAddCourse={onAddCourse} />
       ) : (
         <>
-          <section className="rounded-[2rem] border border-white/70 bg-white/95 p-5 shadow-soft backdrop-blur">
+          <button
+            type="button"
+            className="w-full rounded-[1.75rem] bg-slate-950 p-5 text-left text-white shadow-[0_22px_60px_-38px_rgba(15,23,42,0.75)] active:scale-[0.99]"
+            onClick={() =>
+              nextAssignment ? onOpenCourse(nextAssignment.course.id) : onGoCalendar()
+            }
+          >
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                <p className="text-xs font-black uppercase tracking-wide text-white/55">
                   Next up
                 </p>
                 <h2 className="mt-1 text-2xl font-black tracking-tight">
                   {nextAssignment?.assignment.title || "No urgent tasks"}
                 </h2>
               </div>
-              <CalendarDays className="h-6 w-6 text-slate-400" />
+              <CalendarDays className="h-6 w-6 text-white/50" />
             </div>
-            <p className="mt-3 text-base leading-relaxed text-slate-500">
+            <p className="mt-3 text-base leading-relaxed text-white/64">
               {nextAssignment
-                ? `${nextAssignment.course.name} · ${assignmentDueLabel(
-                    nextAssignment.assignment
+                ? `${nextAssignment.course.name} / ${formatShortDate(
+                    nextAssignment.assignment.dueDate
                   )}`
-                : "You are clear for now. Add upcoming work from a course screen."}
+                : "Add deadlines from any course or the calendar tab."}
             </p>
-          </section>
+          </button>
 
-          <section className="rounded-[2rem] border border-white/70 bg-white/95 p-5 shadow-soft backdrop-blur">
-            <div className="mb-4 flex items-center justify-between gap-4">
+          <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+            <div className="mb-3 flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-wide text-slate-500">
                   Courses
                 </p>
-                <h2 className="mt-1 text-2xl font-black tracking-tight">
-                  Keep moving.
+                <h2 className="text-xl font-black tracking-tight">
+                  Recent classes
                 </h2>
               </div>
               <button
@@ -418,26 +555,28 @@ function MobileDashboard({
                 <ChevronRight className="h-5 w-5" />
               </button>
             </div>
-            <div className="space-y-3">
+            <div className="divide-y divide-slate-100">
               {activeCourses.map((course) => {
                 const metrics = calcMetrics(course);
                 return (
-                  <div
+                  <button
                     key={course.id}
-                    className="flex min-h-[72px] items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-3"
+                    type="button"
+                    className="flex min-h-[68px] w-full items-center justify-between gap-4 py-3 text-left active:scale-[0.99]"
+                    onClick={() => onOpenCourse(course.id)}
                   >
                     <div className="min-w-0">
                       <p className="truncate text-base font-black text-slate-950">
                         {course.name}
                       </p>
-                      <p className="mt-0.5 text-sm text-slate-500">
+                      <p className="mt-0.5 text-sm font-semibold text-slate-500">
                         {folderLabel(course, folders)}
                       </p>
                     </div>
                     <p className="text-lg font-black tabular-nums text-slate-950">
                       {formatPercent(metrics.gradeSoFar)}
                     </p>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -465,10 +604,10 @@ function MobileCourseCard({
   return (
     <button
       type="button"
-      className="w-full rounded-[1.75rem] border border-white/70 bg-white/95 p-4 text-left shadow-soft backdrop-blur active:scale-[0.99]"
+      className="w-full rounded-[1.5rem] border border-white/70 bg-white/95 p-4 text-left shadow-soft backdrop-blur active:scale-[0.99]"
       onClick={onOpen}
     >
-      <div className="flex min-h-[72px] items-center gap-4">
+      <div className="flex min-h-[70px] items-center gap-4">
         <div
           className="h-14 w-2 rounded-full"
           style={{ backgroundColor: course.color ?? "var(--theme-primary)" }}
@@ -477,7 +616,7 @@ function MobileCourseCard({
           <p className="truncate text-lg font-black tracking-tight text-slate-950">
             {course.name}
           </p>
-          <p className="mt-1 truncate text-base text-slate-500">
+          <p className="mt-1 truncate text-base font-semibold text-slate-500">
             {folderLabel(course, folders)}
           </p>
         </div>
@@ -499,7 +638,7 @@ function MobileCourseCard({
           }}
         />
       </div>
-      <p className="mt-3 text-base text-slate-500">
+      <p className="mt-3 text-base font-semibold text-slate-500">
         {completeAssignments}/{course.assignments.length} assignments complete
       </p>
     </button>
@@ -508,12 +647,13 @@ function MobileCourseCard({
 
 function MobileCourses({
   onOpenCourse,
+  onAddCourse,
 }: {
   onOpenCourse: (courseId: string) => void;
+  onAddCourse: () => void;
 }) {
   const courses = useCourseStore((state) => state.courses);
   const folders = useCourseStore((state) => state.folders);
-  const addCourse = useCourseStore((state) => state.addCourse);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
   const foldersById = useMemo(
@@ -529,7 +669,7 @@ function MobileCourses({
     { id: "unfiled", label: "Unfiled" },
     ...folders.map((folder) => ({
       id: folder.id,
-      label: folder.year ? `${folder.year} ${folder.name}` : folder.name,
+      label: folderDisplayName(folder),
     })),
   ];
   const filteredCourses = courses
@@ -553,40 +693,39 @@ function MobileCourses({
           : course.folderId === filter;
       return matchesQuery && matchesFilter;
     })
-    .sort((a, b) => {
-      const folderDelta =
-        courseChronology(a, foldersById) - courseChronology(b, foldersById);
-      if (folderDelta !== 0) return folderDelta;
-      return a.name.localeCompare(b.name, undefined, { numeric: true });
-    });
-  const defaultFolderId = folders[0]?.id ?? null;
-  const createCourse = () => {
-    const courseId = addCourse("New Course", defaultFolderId);
-    onOpenCourse(courseId);
-  };
+    .sort((a, b) => courseSort(a, b, foldersById));
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-5 shadow-soft backdrop-blur">
+    <div className="space-y-4">
+      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-xs font-black uppercase tracking-wide text-slate-500">
               Courses
             </p>
-            <h1 className="mt-1 text-3xl font-black tracking-tight">
-              Your classes.
+            <h1 className="mt-1 text-2xl font-black tracking-tight">
+              Your classes
             </h1>
           </div>
           <button
             type="button"
             className="grid min-h-12 min-w-12 place-items-center rounded-2xl bg-slate-950 text-white shadow-soft active:scale-[0.98]"
-            onClick={createCourse}
+            onClick={onAddCourse}
             aria-label="Add course"
           >
             <Plus className="h-5 w-5" />
           </button>
         </div>
-        <div className="-mx-1 mt-5 flex gap-2 overflow-x-auto px-1 pb-1">
+        <label className="relative mt-4 block">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+          <input
+            className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white pl-12 pr-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search CIV344 or Essay"
+          />
+        </label>
+        <div className="-mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
           {folderOptions.map((option) => {
             const active = filter === option.id;
             return (
@@ -605,19 +744,10 @@ function MobileCourses({
             );
           })}
         </div>
-        <label className="relative mt-4 block">
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-          <input
-            className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white pl-12 pr-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search CIV344 or Essay"
-          />
-        </label>
       </section>
 
       {courses.length === 0 ? (
-        <EmptyCourses onAddCourse={createCourse} />
+        <EmptyCourses onAddCourse={onAddCourse} />
       ) : (
         <div className="space-y-3">
           {filteredCourses.map((course) => (
@@ -630,12 +760,369 @@ function MobileCourses({
           ))}
           {filteredCourses.length === 0 && (
             <p className="rounded-3xl border border-dashed border-slate-300 bg-white/90 px-5 py-8 text-center text-base text-slate-500">
-              No courses in this semester yet.
+              No courses match that search.
             </p>
           )}
         </div>
       )}
     </div>
+  );
+}
+
+function MobileCourseCreateSheet({
+  open,
+  onClose,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: (courseId: string) => void;
+}) {
+  const folders = useCourseStore((state) => state.folders);
+  const addCourse = useCourseStore((state) => state.addCourse);
+  const [name, setName] = useState("");
+  const [folderId, setFolderId] = useState<string | null>(folders[0]?.id ?? null);
+
+  useEffect(() => {
+    if (!open) return;
+    setName("");
+    setFolderId(folders[0]?.id ?? null);
+  }, [folders, open]);
+
+  const submit = () => {
+    const courseId = addCourse(name.trim() || "New Course", folderId);
+    onClose();
+    onCreated(courseId);
+  };
+
+  return (
+    <MobileBottomSheet title="Add course" open={open} onClose={onClose}>
+      <div className="space-y-4">
+        <MobileField label="Course name" hint="Examples: CIV 344, BIO 130, Calculus">
+          <input
+            className="min-h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Course name"
+          />
+        </MobileField>
+        <MobileField label="Semester">
+          <select
+            className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+            value={folderId ?? ""}
+            onChange={(event) => setFolderId(event.target.value || null)}
+          >
+            <option value="">Unfiled</option>
+            {folders.map((folder) => (
+              <option key={folder.id} value={folder.id}>
+                {folderDisplayName(folder)}
+              </option>
+            ))}
+          </select>
+        </MobileField>
+        <button
+          type="button"
+          className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-base font-bold text-white shadow-soft active:scale-[0.98]"
+          onClick={submit}
+        >
+          <Plus className="h-5 w-5" />
+          Create course
+        </button>
+      </div>
+    </MobileBottomSheet>
+  );
+}
+
+function MobileAssignmentSheet({
+  open,
+  onClose,
+  course,
+  assignment,
+}: {
+  open: boolean;
+  onClose: () => void;
+  course: Course;
+  assignment: Assignment | null;
+}) {
+  const addAssignment = useCourseStore((state) => state.addAssignment);
+  const updateAssignment = useCourseStore((state) => state.updateAssignment);
+  const removeAssignment = useCourseStore((state) => state.removeAssignment);
+  const [title, setTitle] = useState("");
+  const [weight, setWeight] = useState("");
+  const [grade, setGrade] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [status, setStatus] = useState<AssignmentStatus>("not_started");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setTitle(assignment?.title ?? "");
+    setWeight(
+      assignment ? String(Number(normalizeWeightToPercent(assignment.weight).toFixed(2))) : ""
+    );
+    setGrade(assignment?.grade == null ? "" : String(assignment.grade));
+    setDueDate(assignment?.dueDate ?? "");
+    setStatus(assignment?.status ?? "not_started");
+    setError("");
+  }, [assignment, open]);
+
+  const save = () => {
+    const parsedWeight = weight.trim() === "" ? 0 : parseFlexibleNumber(weight);
+    const parsedGrade = grade.trim() === "" ? null : parseGradeInput(grade);
+    if (parsedWeight == null || !Number.isFinite(parsedWeight)) {
+      setError("Enter a valid weight.");
+      return;
+    }
+    if (grade.trim() !== "" && (parsedGrade == null || !Number.isFinite(parsedGrade))) {
+      setError("Enter a valid grade.");
+      return;
+    }
+    const payload = {
+      title: title.trim() || "Untitled assignment",
+      dueDate: dueDate || null,
+      weight: parsedWeight,
+      grade: parsedGrade,
+      status: parsedGrade == null ? status : ("completed" as AssignmentStatus),
+    };
+    if (assignment) {
+      updateAssignment(course.id, assignment.id, payload);
+    } else {
+      addAssignment(course.id, payload);
+    }
+    onClose();
+  };
+
+  return (
+    <MobileBottomSheet
+      title={assignment ? "Edit assignment" : "Add assignment"}
+      open={open}
+      onClose={onClose}
+    >
+      <div className="space-y-4">
+        <MobileField label="Assignment name">
+          <div className="relative">
+            <Edit3 className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+            <input
+              className="min-h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-12 pr-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Midterm, lab, final"
+            />
+          </div>
+        </MobileField>
+        <div className="grid grid-cols-2 gap-3">
+          <MobileField label="Weight">
+            <input
+              className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+              inputMode="decimal"
+              value={weight}
+              onChange={(event) => setWeight(event.target.value)}
+              placeholder="25"
+            />
+          </MobileField>
+          <MobileField label="Grade">
+            <input
+              className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+              inputMode="decimal"
+              value={grade}
+              onChange={(event) => setGrade(event.target.value)}
+              placeholder="88"
+            />
+          </MobileField>
+        </div>
+        <MobileField label="Due date">
+          <input
+            className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+            type="date"
+            value={dueDate}
+            onChange={(event) => setDueDate(event.target.value)}
+          />
+        </MobileField>
+        <MobileField label="Status">
+          <select
+            className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+            value={status}
+            onChange={(event) => setStatus(event.target.value as AssignmentStatus)}
+          >
+            {statusOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </MobileField>
+        {error && (
+          <p className="rounded-2xl bg-rose-50 px-4 py-3 text-base font-bold text-rose-700">
+            {error}
+          </p>
+        )}
+        <button
+          type="button"
+          className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-base font-bold text-white shadow-soft active:scale-[0.98]"
+          onClick={save}
+        >
+          <Check className="h-5 w-5" />
+          Save assignment
+        </button>
+        {assignment && (
+          <button
+            type="button"
+            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 text-base font-bold text-rose-700 active:scale-[0.98]"
+            onClick={() => {
+              removeAssignment(course.id, assignment.id);
+              onClose();
+            }}
+          >
+            <Trash2 className="h-5 w-5" />
+            Delete assignment
+          </button>
+        )}
+      </div>
+    </MobileBottomSheet>
+  );
+}
+
+function MobilePassResult({ result }: { result: PassPlanResult }) {
+  if (result.alreadySafe) {
+    return (
+      <p className="rounded-3xl bg-emerald-50 p-4 text-base font-bold leading-relaxed text-emerald-700">
+        You are already at the target. The selected work can average 0% and the
+        projected mark stays around {formatPercent(result.projectedMark)}.
+      </p>
+    );
+  }
+  if (!result.possible) {
+    return (
+      <p className="rounded-3xl bg-rose-50 p-4 text-base font-bold leading-relaxed text-rose-700">
+        You would need about {formatPercent(result.neededEach)} on the selected
+        work, so this target is not reachable with only those items.
+      </p>
+    );
+  }
+  return (
+    <p className="rounded-3xl bg-emerald-50 p-4 text-base font-bold leading-relaxed text-emerald-700">
+      Average about {formatPercent(result.neededEach)} on the selected work to
+      land near {formatPercent(result.target)}.
+    </p>
+  );
+}
+
+function MobilePassHelperSheet({
+  open,
+  onClose,
+  course,
+}: {
+  open: boolean;
+  onClose: () => void;
+  course: Course;
+}) {
+  const [targetDraft, setTargetDraft] = useState("50");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const metrics = calcMetrics(course);
+  const weightsReady = Math.abs(metrics.totalWeights - 100) <= 0.01;
+  const target = clampPercent(parseGradeInput(targetDraft) ?? 50);
+  const result = useMemo(() => {
+    if (!weightsReady) return null;
+    return calculatePassPlan(course, selectedIds, target);
+  }, [course, selectedIds, target, weightsReady]);
+
+  useEffect(() => {
+    if (!open) return;
+    const defaultIds = course.assignments
+      .filter(
+        (assignment) =>
+          assignment.grade == null || assignment.status !== "completed"
+      )
+      .map((assignment) => assignment.id);
+    setSelectedIds(new Set(defaultIds));
+    setTargetDraft("50");
+  }, [course, open]);
+
+  return (
+    <MobileBottomSheet title="Need to pass" open={open} onClose={onClose}>
+      <div className="space-y-4">
+        <div className="rounded-3xl bg-slate-950 p-5 text-white">
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-white/55">
+            What do I need?
+          </p>
+          <p className="mt-3 text-base leading-relaxed text-white/70">
+            Pick the assignments you still control and set the target final
+            mark.
+          </p>
+        </div>
+        <MobileField label="Target final mark">
+          <input
+            className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+            inputMode="decimal"
+            value={targetDraft}
+            onChange={(event) => setTargetDraft(event.target.value)}
+            placeholder="50"
+          />
+        </MobileField>
+
+        {!weightsReady && (
+          <p className="rounded-3xl bg-amber-50 p-4 text-base font-bold leading-relaxed text-amber-800">
+            This calculator needs the course weights to total 100%. Right now
+            they total {formatPercent(metrics.totalWeights)}.
+          </p>
+        )}
+
+        <div className="space-y-2">
+          {course.assignments.map((assignment) => {
+            const active = selectedIds.has(assignment.id);
+            return (
+              <button
+                key={assignment.id}
+                type="button"
+                className={`flex min-h-[68px] w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left active:scale-[0.99] ${
+                  active
+                    ? "border-slate-950 bg-slate-950 text-white"
+                    : "border-slate-200 bg-white text-slate-900"
+                }`}
+                onClick={() =>
+                  setSelectedIds((current) => {
+                    const next = new Set(current);
+                    if (next.has(assignment.id)) next.delete(assignment.id);
+                    else next.add(assignment.id);
+                    return next;
+                  })
+                }
+              >
+                <span
+                  className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border ${
+                    active
+                      ? "border-white/50 bg-white/15"
+                      : "border-slate-200 bg-slate-50"
+                  }`}
+                >
+                  {active && <Check className="h-4 w-4" />}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-base font-black">
+                    {assignment.title}
+                  </span>
+                  <span
+                    className={`mt-0.5 block text-sm font-semibold ${
+                      active ? "text-white/60" : "text-slate-500"
+                    }`}
+                  >
+                    {formatPercent(normalizeWeightToPercent(assignment.weight))} weight
+                    / grade {assignment.grade == null ? "--" : formatPercent(assignment.grade)}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {weightsReady && result && <MobilePassResult result={result} />}
+        {weightsReady && !result && (
+          <p className="rounded-3xl border border-dashed border-slate-300 p-4 text-center text-base font-semibold text-slate-500">
+            Select at least one assignment to calculate.
+          </p>
+        )}
+      </div>
+    </MobileBottomSheet>
   );
 }
 
@@ -652,15 +1139,8 @@ function MobileCourseDetail({
   const moveCourseToFolder = useCourseStore((state) => state.moveCourseToFolder);
   const updateCourse = useCourseStore((state) => state.updateCourse);
   const removeCourse = useCourseStore((state) => state.removeCourse);
-  const addAssignment = useCourseStore((state) => state.addAssignment);
-  const updateAssignment = useCourseStore((state) => state.updateAssignment);
-  const removeAssignment = useCourseStore((state) => state.removeAssignment);
-  const [draft, setDraft] = useState({
-    title: "",
-    weight: "",
-    dueDate: "",
-    grade: "",
-  });
+  const [assignmentSheet, setAssignmentSheet] = useState<Assignment | null | "new">(null);
+  const [passOpen, setPassOpen] = useState(false);
   const course = courses.find((item) => item.id === courseId);
 
   if (!course) {
@@ -682,23 +1162,13 @@ function MobileCourseDetail({
   }
 
   const metrics = calcMetrics(course);
-  const submitAssignment = () => {
-    const title = draft.title.trim() || "New assignment";
-    const weight = Number(draft.weight);
-    const grade = draft.grade === "" ? null : Number(draft.grade);
-    addAssignment(course.id, {
-      title,
-      dueDate: draft.dueDate || null,
-      weight: Number.isFinite(weight) ? weight : 0,
-      grade: grade != null && Number.isFinite(grade) ? grade : null,
-      status: grade != null && Number.isFinite(grade) ? "completed" : "not_started",
-    });
-    setDraft({ title: "", weight: "", dueDate: "", grade: "" });
-  };
+  const sortedAssignments = course.assignments.slice().sort(assignmentSort);
+  const selectedAssignment =
+    assignmentSheet && assignmentSheet !== "new" ? assignmentSheet : null;
 
   return (
-    <div className="min-h-[100dvh] space-y-5">
-      <header className="sticky top-[calc(env(safe-area-inset-top)+0.5rem)] z-10 -mx-1 rounded-[1.75rem] border border-white/70 bg-white/90 p-3 shadow-soft backdrop-blur">
+    <div className="min-h-[100dvh] space-y-4">
+      <header className="sticky top-[calc(env(safe-area-inset-top)+0.5rem)] z-10 -mx-1 rounded-[1.75rem] border border-white/70 bg-white/92 p-3 shadow-soft backdrop-blur">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -710,266 +1180,207 @@ function MobileCourseDetail({
           </button>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-              Course entry
+              Course
             </p>
-            <input
-              className="mt-1 w-full bg-transparent text-2xl font-black tracking-tight text-slate-950 outline-none"
-              value={course.name}
-              onChange={(event) => renameCourse(course.id, event.target.value)}
-              aria-label="Course name"
-            />
+            <div className="relative mt-1">
+              <Edit3 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                className="min-h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-xl font-black tracking-tight text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+                value={course.name}
+                onChange={(event) => renameCourse(course.id, event.target.value)}
+                aria-label="Course name"
+              />
+            </div>
           </div>
         </div>
       </header>
 
-      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-5 shadow-soft backdrop-blur">
-        <div className="grid grid-cols-2 gap-3">
-          <MobileMetric
-            label="Current"
-            value={formatPercent(metrics.gradeSoFar)}
-            detail="Grade so far"
-          />
-          <MobileMetric
-            label="Progress"
-            value={`${Math.round(metrics.displayCompleted)}%`}
-            detail="Weight entered"
-          />
-        </div>
+      <section className="grid grid-cols-2 gap-3">
+        <MobileMetric
+          label="Current"
+          value={formatPercent(metrics.gradeSoFar)}
+          detail="Grade so far"
+        />
+        <MobileMetric
+          label="Progress"
+          value={`${Math.round(metrics.displayCompleted)}%`}
+          detail="Weight entered"
+        />
       </section>
 
-      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-5 shadow-soft backdrop-blur">
-        <h2 className="text-2xl font-black tracking-tight">Course setup</h2>
-        <label className="mt-5 block text-base font-bold text-slate-700">
-          Semester
-          <select
-            className="mt-2 min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-900"
-            value={course.folderId ?? ""}
-            onChange={(event) =>
-              moveCourseToFolder(course.id, event.target.value || null)
-            }
-          >
-            <option value="">Unfiled</option>
-            {folders.map((folder) => (
-              <option key={folder.id} value={folder.id}>
-                {folder.year ? `${folder.year} ${folder.name}` : folder.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="mt-4 block text-base font-bold text-slate-700">
-          Credit weight
-          <input
-            className="mt-2 min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-900"
-            inputMode="decimal"
-            value={course.creditWeight ?? ""}
-            onChange={(event) => {
-              const value = Number(event.target.value);
-              updateCourse(course.id, {
-                creditWeight:
-                  event.target.value === "" || !Number.isFinite(value)
-                    ? null
-                    : value,
-              });
-            }}
-            placeholder="Default"
-          />
-        </label>
-        <label className="mt-4 block text-base font-bold text-slate-700">
-          GPA mode
-          <select
-            className="mt-2 min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-900"
-            value={course.gradeMode ?? "graded"}
-            onChange={(event) =>
-              updateCourse(course.id, {
-                gradeMode: event.target.value as GradeMode,
-              })
-            }
-          >
-            {gradeModeOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="mt-4 flex min-h-12 items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 text-base font-bold text-slate-700">
-          Count in GPA
-          <input
-            className="h-5 w-5 accent-slate-950"
-            type="checkbox"
-            checked={course.includeInGpa ?? true}
-            onChange={(event) =>
-              updateCourse(course.id, { includeInGpa: event.target.checked })
-            }
-          />
-        </label>
-      </section>
-
-      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-5 shadow-soft backdrop-blur">
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="text-2xl font-black tracking-tight">Assignments</h2>
-          <ClipboardList className="h-6 w-6 text-slate-400" />
+      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+              Course setup
+            </p>
+            <h2 className="text-xl font-black tracking-tight">Settings</h2>
+          </div>
+          <Settings className="h-5 w-5 text-slate-400" />
         </div>
-        <div className="mt-4 space-y-3">
-          {course.assignments.map((assignment) => (
-            <article
-              key={assignment.id}
-              className="rounded-3xl border border-slate-200 bg-white p-4"
+        <div className="space-y-4">
+          <MobileField label="Semester">
+            <select
+              className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-900 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+              value={course.folderId ?? ""}
+              onChange={(event) =>
+                moveCourseToFolder(course.id, event.target.value || null)
+              }
             >
-              <div className="flex items-start gap-3">
-                <input
-                  className="min-h-11 min-w-0 flex-1 bg-transparent text-lg font-black text-slate-950 outline-none"
-                  value={assignment.title}
-                  onChange={(event) =>
-                    updateAssignment(course.id, assignment.id, {
-                      title: event.target.value,
-                    })
-                  }
-                  aria-label="Assignment title"
-                />
-                <button
-                  type="button"
-                  className="grid min-h-11 min-w-11 place-items-center rounded-2xl border border-rose-100 bg-rose-50 text-rose-600"
-                  onClick={() => removeAssignment(course.id, assignment.id)}
-                  aria-label="Delete assignment"
-                >
-                  <Trash2 className="h-5 w-5" />
-                </button>
+              <option value="">Unfiled</option>
+              {folders.map((folder) => (
+                <option key={folder.id} value={folder.id}>
+                  {folderDisplayName(folder)}
+                </option>
+              ))}
+            </select>
+          </MobileField>
+          <div className="grid grid-cols-2 gap-3">
+            <MobileField label="Credit">
+              <input
+                className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-900 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+                inputMode="decimal"
+                value={course.creditWeight ?? ""}
+                onChange={(event) => {
+                  const value = parseFlexibleNumber(event.target.value);
+                  updateCourse(course.id, {
+                    creditWeight:
+                      event.target.value === "" || value == null ? null : value,
+                  });
+                }}
+                placeholder="Default"
+              />
+            </MobileField>
+            <MobileField label="GPA mode">
+              <select
+                className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 text-base font-semibold text-slate-900 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+                value={course.gradeMode ?? "graded"}
+                onChange={(event) =>
+                  updateCourse(course.id, {
+                    gradeMode: event.target.value as GradeMode,
+                  })
+                }
+              >
+                {gradeModeOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </MobileField>
+          </div>
+          <label className="flex min-h-12 items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 text-base font-bold text-slate-700">
+            Count in GPA
+            <input
+              className="h-5 w-5 accent-slate-950"
+              type="checkbox"
+              checked={course.includeInGpa ?? true}
+              onChange={(event) =>
+                updateCourse(course.id, { includeInGpa: event.target.checked })
+              }
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+              Assignments
+            </p>
+            <h2 className="text-xl font-black tracking-tight">Grades and tasks</h2>
+          </div>
+          <button
+            type="button"
+            className="grid min-h-12 min-w-12 place-items-center rounded-2xl bg-slate-950 text-white shadow-soft active:scale-[0.98]"
+            onClick={() => setAssignmentSheet("new")}
+            aria-label="Add assignment"
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="mt-4 space-y-2">
+          {sortedAssignments.map((assignment) => (
+            <button
+              key={assignment.id}
+              type="button"
+              className="flex min-h-[76px] w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left active:scale-[0.99]"
+              onClick={() => setAssignmentSheet(assignment)}
+            >
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-base font-black text-slate-950">
+                  {assignment.title}
+                </p>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-500">
+                  {formatShortDate(assignment.dueDate)} /{" "}
+                  {formatPercent(normalizeWeightToPercent(assignment.weight))} weight
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-black ${statusClasses(
+                      assignment.status
+                    )}`}
+                  >
+                    {statusLabel(assignment.status)}
+                  </span>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-600">
+                    {assignment.grade == null ? "No grade" : formatPercent(assignment.grade)}
+                  </span>
+                </div>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <label className="text-base font-bold text-slate-700">
-                  Weight
-                  <input
-                    className="mt-1 min-h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-base font-semibold"
-                    inputMode="decimal"
-                    value={assignment.weight}
-                    onChange={(event) =>
-                      updateAssignment(course.id, assignment.id, {
-                        weight: Number(event.target.value) || 0,
-                      })
-                    }
-                  />
-                </label>
-                <label className="text-base font-bold text-slate-700">
-                  Grade
-                  <input
-                    className="mt-1 min-h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-base font-semibold"
-                    inputMode="decimal"
-                    value={assignment.grade ?? ""}
-                    onChange={(event) => {
-                      const value = Number(event.target.value);
-                      updateAssignment(course.id, assignment.id, {
-                        grade:
-                          event.target.value === "" || !Number.isFinite(value)
-                            ? null
-                            : value,
-                        status:
-                          event.target.value === "" || !Number.isFinite(value)
-                            ? assignment.status
-                            : "completed",
-                      });
-                    }}
-                  />
-                </label>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <input
-                  className="min-h-11 rounded-2xl border border-slate-200 bg-white px-3 text-base font-semibold"
-                  type="date"
-                  value={assignment.dueDate ?? ""}
-                  onChange={(event) =>
-                    updateAssignment(course.id, assignment.id, {
-                      dueDate: event.target.value || null,
-                    })
-                  }
-                  aria-label="Due date"
-                />
-                <select
-                  className="min-h-11 rounded-2xl border border-slate-200 bg-white px-3 text-base font-semibold"
-                  value={assignment.status}
-                  onChange={(event) =>
-                    updateAssignment(course.id, assignment.id, {
-                      status: event.target.value as AssignmentStatus,
-                    })
-                  }
-                  aria-label="Assignment status"
-                >
-                  {statusOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </article>
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-500">
+                <Edit3 className="h-4 w-4" />
+              </span>
+            </button>
           ))}
           {course.assignments.length === 0 && (
-            <p className="rounded-3xl border border-dashed border-slate-300 px-5 py-8 text-center text-base text-slate-500">
-              No assignments yet.
-            </p>
+            <div className="rounded-3xl border border-dashed border-slate-300 px-5 py-8 text-center">
+              <ClipboardList className="mx-auto h-7 w-7 text-slate-400" />
+              <p className="mt-3 text-base font-semibold text-slate-500">
+                No assignments yet.
+              </p>
+              <button
+                type="button"
+                className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-base font-bold text-white active:scale-[0.98]"
+                onClick={() => setAssignmentSheet("new")}
+              >
+                <Plus className="h-5 w-5" />
+                Add assignment
+              </button>
+            </div>
           )}
         </div>
+      </section>
 
-        <div className="mt-5 rounded-3xl bg-slate-50 p-4">
-          <h3 className="text-lg font-black tracking-tight">Add assignment</h3>
-          <div className="mt-3 space-y-3">
-            <input
-              className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold"
-              value={draft.title}
-              onChange={(event) =>
-                setDraft((current) => ({ ...current, title: event.target.value }))
-              }
-              placeholder="Assignment name"
-            />
-            <div className="grid grid-cols-2 gap-3">
-              <input
-                className="min-h-12 rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold"
-                inputMode="decimal"
-                value={draft.weight}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    weight: event.target.value,
-                  }))
-                }
-                placeholder="Weight"
-              />
-              <input
-                className="min-h-12 rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold"
-                inputMode="decimal"
-                value={draft.grade}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, grade: event.target.value }))
-                }
-                placeholder="Grade"
-              />
-            </div>
-            <input
-              className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold"
-              type="date"
-              value={draft.dueDate}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  dueDate: event.target.value,
-                }))
-              }
-            />
-            <button
-              type="button"
-              className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-base font-bold text-white shadow-soft active:scale-[0.98]"
-              onClick={submitAssignment}
-            >
-              <Plus className="h-5 w-5" />
-              Add assignment
-            </button>
+      <section className="rounded-[2rem] border border-slate-200 bg-gradient-to-br from-slate-950 to-slate-800 p-5 text-white shadow-[0_22px_60px_-38px_rgba(15,23,42,0.75)]">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-white/55">
+              Calculator
+            </p>
+            <h2 className="mt-2 text-2xl font-black tracking-tight">
+              Need to pass?
+            </h2>
+            <p className="mt-2 text-base leading-relaxed text-white/65">
+              Pick upcoming work and see the average you need.
+            </p>
           </div>
+          <Target className="h-7 w-7 text-white/50" />
         </div>
+        <button
+          type="button"
+          className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-white px-4 text-base font-black text-slate-950 active:scale-[0.98]"
+          onClick={() => setPassOpen(true)}
+        >
+          <Target className="h-5 w-5" />
+          Open calculator
+        </button>
       </section>
 
       <button
         type="button"
-        className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 text-base font-bold text-rose-700"
+        className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 text-base font-bold text-rose-700 active:scale-[0.98]"
         onClick={() => {
           removeCourse(course.id);
           onBack();
@@ -978,6 +1389,396 @@ function MobileCourseDetail({
         <Trash2 className="h-5 w-5" />
         Delete course
       </button>
+
+      <MobileAssignmentSheet
+        open={assignmentSheet != null}
+        onClose={() => setAssignmentSheet(null)}
+        course={course}
+        assignment={selectedAssignment}
+      />
+      <MobilePassHelperSheet
+        open={passOpen}
+        onClose={() => setPassOpen(false)}
+        course={course}
+      />
+    </div>
+  );
+}
+
+type CalendarItem = {
+  course: Course;
+  assignment: Assignment;
+  folder: CourseFolder | null;
+};
+
+function MobileQuickAssignmentSheet({
+  open,
+  onClose,
+  initialDate,
+  onOpenCourse,
+}: {
+  open: boolean;
+  onClose: () => void;
+  initialDate: string;
+  onOpenCourse: (courseId: string) => void;
+}) {
+  const courses = useCourseStore((state) => state.courses);
+  const addAssignment = useCourseStore((state) => state.addAssignment);
+  const [courseId, setCourseId] = useState("");
+  const [title, setTitle] = useState("");
+  const [weight, setWeight] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setCourseId(courses[0]?.id ?? "");
+    setTitle("");
+    setWeight("");
+    setError("");
+  }, [courses, open]);
+
+  const submit = () => {
+    if (!courseId) {
+      setError("Create a course first.");
+      return;
+    }
+    const parsedWeight = weight.trim() === "" ? 0 : parseFlexibleNumber(weight);
+    if (parsedWeight == null || !Number.isFinite(parsedWeight)) {
+      setError("Enter a valid weight.");
+      return;
+    }
+    addAssignment(courseId, {
+      title: title.trim() || "New assignment",
+      dueDate: initialDate,
+      weight: parsedWeight,
+      grade: null,
+      status: "not_started",
+    });
+    onClose();
+    onOpenCourse(courseId);
+  };
+
+  return (
+    <MobileBottomSheet title="Add deadline" open={open} onClose={onClose}>
+      <div className="space-y-4">
+        {courses.length === 0 ? (
+          <p className="rounded-3xl border border-dashed border-slate-300 px-5 py-8 text-center text-base font-semibold text-slate-500">
+            Add a course first, then deadlines can live in that course.
+          </p>
+        ) : (
+          <>
+            <MobileField label="Course">
+              <select
+                className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+                value={courseId}
+                onChange={(event) => setCourseId(event.target.value)}
+              >
+                {courses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.name}
+                  </option>
+                ))}
+              </select>
+            </MobileField>
+            <MobileField label="Assignment">
+              <input
+                className="min-h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="Lab, quiz, project"
+              />
+            </MobileField>
+            <MobileField label="Weight" hint={`Due ${formatLongDate(initialDate)}`}>
+              <input
+                className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+                inputMode="decimal"
+                value={weight}
+                onChange={(event) => setWeight(event.target.value)}
+                placeholder="10"
+              />
+            </MobileField>
+          </>
+        )}
+        {error && (
+          <p className="rounded-2xl bg-rose-50 px-4 py-3 text-base font-bold text-rose-700">
+            {error}
+          </p>
+        )}
+        <button
+          type="button"
+          className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-base font-bold text-white shadow-soft active:scale-[0.98] disabled:opacity-50"
+          onClick={submit}
+          disabled={courses.length === 0}
+        >
+          <Plus className="h-5 w-5" />
+          Save deadline
+        </button>
+      </div>
+    </MobileBottomSheet>
+  );
+}
+
+function MobileCalendar({
+  onOpenCourse,
+}: {
+  onOpenCourse: (courseId: string) => void;
+}) {
+  const courses = useCourseStore((state) => state.courses);
+  const folders = useCourseStore((state) => state.folders);
+  const updateAssignment = useCourseStore((state) => state.updateAssignment);
+  const [activeMonth, setActiveMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [selectedDate, setSelectedDate] = useState(todayIso);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const foldersById = useMemo(
+    () =>
+      new Map<string, CourseFolder>(
+        folders.map((folder) => [folder.id, folder])
+      ),
+    [folders]
+  );
+  const items = useMemo<CalendarItem[]>(
+    () =>
+      courses
+        .flatMap((course) =>
+          course.assignments
+            .filter((assignment) => assignment.dueDate)
+            .map((assignment) => ({
+              course,
+              assignment,
+              folder: course.folderId
+                ? foldersById.get(course.folderId) ?? null
+                : null,
+            }))
+        )
+        .sort((a, b) => assignmentSort(a.assignment, b.assignment)),
+    [courses, foldersById]
+  );
+  const itemsByDate = useMemo(() => {
+    const map = new Map<string, CalendarItem[]>();
+    items.forEach((item) => {
+      const date = item.assignment.dueDate;
+      if (!date) return;
+      map.set(date, [...(map.get(date) ?? []), item]);
+    });
+    return map;
+  }, [items]);
+  const monthDays = useMemo(() => {
+    const first = new Date(activeMonth.getFullYear(), activeMonth.getMonth(), 1);
+    const start = new Date(first);
+    start.setDate(first.getDate() - first.getDay());
+    return Array.from({ length: 42 }, (_, index) => {
+      const date = new Date(start);
+      date.setDate(start.getDate() + index);
+      return date;
+    });
+  }, [activeMonth]);
+  const selectedItems = itemsByDate.get(selectedDate) ?? [];
+  const upcomingItems = items
+    .filter((item) => (item.assignment.dueDate ?? "") >= todayIso())
+    .slice(0, 6);
+
+  return (
+    <div className="space-y-4">
+      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+              Calendar
+            </p>
+            <h1 className="mt-1 text-2xl font-black tracking-tight">
+              Deadlines
+            </h1>
+          </div>
+          <button
+            type="button"
+            className="grid min-h-12 min-w-12 place-items-center rounded-2xl bg-slate-950 text-white shadow-soft active:scale-[0.98]"
+            onClick={() => setQuickOpen(true)}
+            aria-label="Add deadline"
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-slate-100 p-2">
+          <button
+            type="button"
+            className="grid min-h-11 min-w-11 place-items-center rounded-xl bg-white text-slate-700 shadow-soft active:scale-[0.98]"
+            onClick={() =>
+              setActiveMonth(
+                new Date(activeMonth.getFullYear(), activeMonth.getMonth() - 1, 1)
+              )
+            }
+            aria-label="Previous month"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <p className="text-base font-black text-slate-950">
+            {monthTitle(activeMonth)}
+          </p>
+          <button
+            type="button"
+            className="grid min-h-11 min-w-11 place-items-center rounded-xl bg-white text-slate-700 shadow-soft active:scale-[0.98]"
+            onClick={() =>
+              setActiveMonth(
+                new Date(activeMonth.getFullYear(), activeMonth.getMonth() + 1, 1)
+              )
+            }
+            aria-label="Next month"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="mt-4 grid grid-cols-7 gap-1 text-center text-xs font-black uppercase tracking-wide text-slate-400">
+          {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
+            <div key={`${day}-${index}`} className="py-1">
+              {day}
+            </div>
+          ))}
+        </div>
+        <div className="mt-1 grid grid-cols-7 gap-1">
+          {monthDays.map((date) => {
+            const iso = toIsoDate(date);
+            const isSelected = iso === selectedDate;
+            const isToday = iso === todayIso();
+            const dim = date.getMonth() !== activeMonth.getMonth();
+            const count = itemsByDate.get(iso)?.length ?? 0;
+            return (
+              <button
+                key={iso}
+                type="button"
+                className={`relative grid min-h-11 place-items-center rounded-2xl text-sm font-black transition active:scale-[0.96] ${
+                  isSelected
+                    ? "bg-slate-950 text-white"
+                    : isToday
+                    ? "bg-slate-200 text-slate-950"
+                    : "bg-white text-slate-700"
+                } ${dim ? "opacity-45" : ""}`}
+                onClick={() => setSelectedDate(iso)}
+              >
+                {date.getDate()}
+                {count > 0 && (
+                  <span
+                    className={`absolute bottom-1.5 h-1.5 w-1.5 rounded-full ${
+                      isSelected ? "bg-white" : "bg-slate-950"
+                    }`}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+              Selected day
+            </p>
+            <h2 className="text-xl font-black tracking-tight">
+              {formatLongDate(selectedDate)}
+            </h2>
+          </div>
+          <CalendarDays className="h-5 w-5 text-slate-400" />
+        </div>
+        <div className="space-y-2">
+          {selectedItems.map((item) => (
+            <CalendarAssignmentRow
+              key={`${item.course.id}-${item.assignment.id}`}
+              item={item}
+              onOpenCourse={() => onOpenCourse(item.course.id)}
+              onComplete={() =>
+                updateAssignment(item.course.id, item.assignment.id, {
+                  status: "completed",
+                })
+              }
+            />
+          ))}
+          {selectedItems.length === 0 && (
+            <p className="rounded-3xl border border-dashed border-slate-300 px-5 py-8 text-center text-base font-semibold text-slate-500">
+              No deadlines on this day.
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+        <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+          Upcoming
+        </p>
+        <div className="mt-3 space-y-2">
+          {upcomingItems.map((item) => (
+            <CalendarAssignmentRow
+              key={`${item.course.id}-${item.assignment.id}`}
+              item={item}
+              onOpenCourse={() => onOpenCourse(item.course.id)}
+              onComplete={() =>
+                updateAssignment(item.course.id, item.assignment.id, {
+                  status: "completed",
+                })
+              }
+            />
+          ))}
+          {upcomingItems.length === 0 && (
+            <p className="rounded-3xl border border-dashed border-slate-300 px-5 py-8 text-center text-base font-semibold text-slate-500">
+              Nothing dated yet.
+            </p>
+          )}
+        </div>
+      </section>
+
+      <MobileQuickAssignmentSheet
+        open={quickOpen}
+        onClose={() => setQuickOpen(false)}
+        initialDate={selectedDate}
+        onOpenCourse={onOpenCourse}
+      />
+    </div>
+  );
+}
+
+function CalendarAssignmentRow({
+  item,
+  onOpenCourse,
+  onComplete,
+}: {
+  item: CalendarItem;
+  onOpenCourse: () => void;
+  onComplete: () => void;
+}) {
+  return (
+    <div className="flex min-h-[72px] items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3">
+      <button
+        type="button"
+        className="min-w-0 flex-1 text-left active:scale-[0.99]"
+        onClick={onOpenCourse}
+      >
+        <p className="truncate text-base font-black text-slate-950">
+          {item.assignment.title}
+        </p>
+        <p className="mt-1 truncate text-sm font-semibold text-slate-500">
+          {item.course.name} / {formatShortDate(item.assignment.dueDate)}
+        </p>
+        <p className="mt-1 truncate text-sm font-semibold text-slate-400">
+          {item.folder ? folderDisplayName(item.folder) : "Unfiled"}
+        </p>
+      </button>
+      {item.assignment.status === "completed" ? (
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-emerald-50 text-emerald-700">
+          <CheckCircle2 className="h-5 w-5" />
+        </span>
+      ) : (
+        <button
+          type="button"
+          className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-2xl border border-slate-200 bg-white text-slate-500 active:scale-[0.98]"
+          onClick={onComplete}
+          aria-label="Mark complete"
+        >
+          <Check className="h-5 w-5" />
+        </button>
+      )}
     </div>
   );
 }
@@ -994,16 +1795,16 @@ function MobileGpa({
   const rows = [...yearRows, ...sessionRows];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <MobileGpaHero report={report} onOpenGpa={onOpenGpa} />
-      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-5 shadow-soft backdrop-blur">
+      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-xs font-black uppercase tracking-wide text-slate-500">
               Breakdown
             </p>
-            <h1 className="mt-1 text-3xl font-black tracking-tight">
-              Your GPA map.
+            <h1 className="mt-1 text-2xl font-black tracking-tight">
+              GPA map
             </h1>
           </div>
           <button
@@ -1015,17 +1816,17 @@ function MobileGpa({
             <CircleHelp className="h-5 w-5" />
           </button>
         </div>
-        <div className="mt-5 space-y-3">
+        <div className="mt-4 divide-y divide-slate-100">
           {rows.map((row) => (
             <div
               key={`${row.label}-${"id" in row ? row.id : row.key}`}
-              className="flex min-h-[72px] items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-3"
+              className="flex min-h-[68px] items-center justify-between gap-4 py-3"
             >
               <div className="min-w-0">
                 <p className="truncate text-base font-black text-slate-950">
                   {row.label}
                 </p>
-                <p className="mt-1 text-base text-slate-500">
+                <p className="mt-1 text-base font-semibold text-slate-500">
                   {averageDetail(row.result)}
                 </p>
               </div>
@@ -1043,19 +1844,17 @@ function MobileGpa({
           )}
         </div>
       </section>
-      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-5 shadow-soft backdrop-blur">
-        <div className="grid grid-cols-2 gap-3">
-          <MobileMetric
-            label="Credits"
-            value={formatCredits(report.cumulative.creditsIncluded)}
-            detail="Included now"
-          />
-          <MobileMetric
-            label="Waiting"
-            value={String(waitingCount)}
-            detail="Need final marks"
-          />
-        </div>
+      <section className="grid grid-cols-2 gap-3">
+        <MobileMetric
+          label="Credits"
+          value={formatCredits(report.cumulative.creditsIncluded)}
+          detail="Included now"
+        />
+        <MobileMetric
+          label="Waiting"
+          value={String(waitingCount)}
+          detail="Need final marks"
+        />
       </section>
     </div>
   );
@@ -1072,7 +1871,7 @@ function MobileGpaSheet({
   const yearRows = gpaYearRows(report);
   const sessionRows = gpaSessionRows(report);
   const help = GPA_POLICY_EXPLANATIONS[report.policy.id];
-  const rows = [...yearRows.slice(0, 4), ...sessionRows.slice(0, 6)];
+  const rows = [...yearRows, ...sessionRows];
 
   return (
     <MobileBottomSheet title="GPA breakdown" open={open} onClose={onClose}>
@@ -1122,13 +1921,182 @@ function MobileGpaSheet({
           {help.summary}
         </p>
         <div className="mt-4 space-y-3">
-          {help.bullets.slice(0, 5).map((bullet) => (
-            <p key={bullet} className="flex gap-3 text-base leading-relaxed text-slate-600">
+          {help.bullets.map((bullet) => (
+            <p
+              key={bullet}
+              className="flex gap-3 text-base leading-relaxed text-slate-600"
+            >
               <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-slate-400" />
               <span>{bullet}</span>
             </p>
           ))}
         </div>
+        {help.note && (
+          <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-base font-semibold text-slate-500">
+            {help.note}
+          </p>
+        )}
+      </div>
+
+      <div className="mt-5 rounded-3xl border border-slate-200 bg-white p-5">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+              Grade scale
+            </p>
+            <h3 className="mt-1 text-xl font-black tracking-tight">
+              Percent conversion
+            </h3>
+          </div>
+          <ListChecks className="h-5 w-5 text-slate-400" />
+        </div>
+        <div className="mt-4 max-h-[46dvh] overflow-y-auto overscroll-contain rounded-2xl border border-slate-200">
+          <table className="w-full border-collapse text-left text-sm">
+            <thead className="sticky top-0 bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-3 py-3">Range</th>
+                <th className="px-3 py-3">Letter</th>
+                <th className="px-3 py-3 text-right">
+                  {report.policy.scaleKind === "percent"
+                    ? "Value"
+                    : report.policy.scaleLabel}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {report.policy.gradeBands.map((band) => (
+                <tr key={`${band.letter}-${band.minPercent}`}>
+                  <td className="px-3 py-3 font-bold text-slate-700">
+                    {formatGradeRange(band.minPercent, band.maxPercent)}
+                  </td>
+                  <td className="px-3 py-3 font-black text-slate-950">
+                    {band.letter}
+                  </td>
+                  <td className="px-3 py-3 text-right font-black tabular-nums text-slate-950">
+                    {formatScaleValue(band.value)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </MobileBottomSheet>
+  );
+}
+
+function MobileSemesterSheet({
+  open,
+  onClose,
+  folder,
+}: {
+  open: boolean;
+  onClose: () => void;
+  folder: CourseFolder | null;
+}) {
+  const addFolder = useCourseStore((state) => state.addFolder);
+  const renameFolder = useCourseStore((state) => state.renameFolder);
+  const setFolderColor = useCourseStore((state) => state.setFolderColor);
+  const removeFolder = useCourseStore((state) => state.removeFolder);
+  const folders = useCourseStore((state) => state.folders);
+  const [name, setName] = useState("");
+  const [year, setYear] = useState<string>(semesterYears[0]);
+  const [color, setColor] = useState<string>(semesterColors[0]);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setName(folder?.name ?? "");
+    setYear(folder?.year ?? semesterYears[0]);
+    setColor(folder?.color ?? semesterColors[folders.length % semesterColors.length]);
+    setError("");
+  }, [folder, folders.length, open]);
+
+  const save = () => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setError("Name the semester.");
+      return;
+    }
+    if (folder) {
+      renameFolder(folder.id, trimmed);
+      setFolderColor(folder.id, color);
+      useCourseStore.setState((state) => ({
+        folders: state.folders.map((item) =>
+          item.id === folder.id ? { ...item, year: year.trim() || undefined } : item
+        ),
+      }));
+    } else {
+      addFolder(trimmed, color, year.trim() || undefined);
+    }
+    onClose();
+  };
+
+  return (
+    <MobileBottomSheet
+      title={folder ? "Edit semester" : "Add semester"}
+      open={open}
+      onClose={onClose}
+    >
+      <div className="space-y-4">
+        <MobileField label="Semester name">
+          <input
+            className="min-h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Fall, Winter, Summer"
+          />
+        </MobileField>
+        <MobileField label="Year">
+          <input
+            className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+            value={year}
+            onChange={(event) => setYear(event.target.value)}
+            placeholder="Year 1"
+          />
+        </MobileField>
+        <MobileField label="Color">
+          <div className="grid grid-cols-4 gap-2">
+            {semesterColors.map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={`min-h-12 rounded-2xl border ${
+                  color === option ? "border-slate-950" : "border-slate-200"
+                }`}
+                style={{ backgroundColor: option }}
+                onClick={() => setColor(option)}
+                aria-label={`Use ${option}`}
+              />
+            ))}
+          </div>
+        </MobileField>
+        {error && (
+          <p className="rounded-2xl bg-rose-50 px-4 py-3 text-base font-bold text-rose-700">
+            {error}
+          </p>
+        )}
+        <button
+          type="button"
+          className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-base font-bold text-white shadow-soft active:scale-[0.98]"
+          onClick={save}
+        >
+          <Check className="h-5 w-5" />
+          Save semester
+        </button>
+        {folder && (
+          <button
+            type="button"
+            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 text-base font-bold text-rose-700 active:scale-[0.98]"
+            onClick={() => {
+              removeFolder(folder.id);
+              onClose();
+            }}
+          >
+            <Trash2 className="h-5 w-5" />
+            Delete semester
+          </button>
+        )}
       </div>
     </MobileBottomSheet>
   );
@@ -1143,15 +2111,17 @@ function MobileSettings() {
   const setUniversityTheme = useCourseStore((state) => state.setUniversityTheme);
   const customThemeId = useCourseStore((state) => state.customThemeId ?? "classic");
   const setCustomTheme = useCourseStore((state) => state.setCustomTheme);
+  const folders = useCourseStore((state) => state.folders);
+  const [semesterSheet, setSemesterSheet] = useState<CourseFolder | null | "new">(null);
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-5 shadow-soft backdrop-blur">
+    <div className="space-y-4">
+      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
         <p className="text-xs font-black uppercase tracking-wide text-slate-500">
           Settings
         </p>
-        <h1 className="mt-1 text-3xl font-black tracking-tight">
-          Match your school.
+        <h1 className="mt-1 text-2xl font-black tracking-tight">
+          School and setup
         </h1>
         <div className="mt-5 grid grid-cols-2 gap-3 rounded-3xl bg-slate-100 p-1.5">
           {[
@@ -1176,58 +2146,135 @@ function MobileSettings() {
       </section>
 
       {appMode === "university" ? (
-        <section className="rounded-[2rem] border border-white/70 bg-white/95 p-5 shadow-soft backdrop-blur">
-          <div className="mb-4 flex items-center gap-3">
-            <GraduationCap className="h-6 w-6 text-slate-400" />
-            <h2 className="text-2xl font-black tracking-tight">University</h2>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {universityOptions.map((option) => {
-              const active = universityThemeId === option.id;
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={`min-h-14 rounded-2xl border px-3 text-base font-black ${
-                    active
-                      ? "border-slate-950 bg-slate-950 text-white"
-                      : "border-slate-200 bg-white text-slate-700"
-                  }`}
-                  onClick={() => setUniversityTheme(option.id)}
+        <>
+          <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+            <div className="mb-4 flex items-center gap-3">
+              <GraduationCap className="h-6 w-6 text-slate-400" />
+              <h2 className="text-2xl font-black tracking-tight">University</h2>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {universityOptions.map((option) => {
+                const active = universityThemeId === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`min-h-14 rounded-2xl border px-3 text-base font-black ${
+                      active
+                        ? "border-slate-950 bg-slate-950 text-white"
+                        : "border-slate-200 bg-white text-slate-700"
+                    }`}
+                    onClick={() => setUniversityTheme(option.id)}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+          <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+              Semesters
+            </p>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {folders.map((folder) => (
+                <div
+                  key={folder.id}
+                  className="rounded-2xl border border-slate-200 bg-white px-3 py-3"
                 >
-                  {option.label}
-                </button>
-              );
-            })}
-          </div>
-        </section>
+                  <p className="text-xs font-black text-slate-400">
+                    {folder.year}
+                  </p>
+                  <p className="mt-1 text-sm font-black text-slate-800">
+                    {folder.name}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        </>
       ) : (
-        <section className="rounded-[2rem] border border-white/70 bg-white/95 p-5 shadow-soft backdrop-blur">
-          <div className="mb-4 flex items-center gap-3">
-            <Sparkles className="h-6 w-6 text-slate-400" />
-            <h2 className="text-2xl font-black tracking-tight">Theme</h2>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {customThemeOptions.map((option) => {
-              const active = customThemeId === option.id;
-              return (
+        <>
+          <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+            <div className="mb-4 flex items-center gap-3">
+              <Sparkles className="h-6 w-6 text-slate-400" />
+              <h2 className="text-2xl font-black tracking-tight">Theme</h2>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {customThemeOptions.map((option) => {
+                const active = customThemeId === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`min-h-14 rounded-2xl border px-3 text-base font-black ${
+                      active
+                        ? "border-slate-950 bg-slate-950 text-white"
+                        : "border-slate-200 bg-white text-slate-700"
+                    }`}
+                    onClick={() => setCustomTheme(option.id)}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+          <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                  Semesters
+                </p>
+                <h2 className="text-xl font-black tracking-tight">Custom setup</h2>
+              </div>
+              <button
+                type="button"
+                className="grid min-h-12 min-w-12 place-items-center rounded-2xl bg-slate-950 text-white active:scale-[0.98]"
+                onClick={() => setSemesterSheet("new")}
+                aria-label="Add semester"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-2">
+              {folders.map((folder) => (
                 <button
-                  key={option.id}
+                  key={folder.id}
                   type="button"
-                  className={`min-h-14 rounded-2xl border px-3 text-base font-black ${
-                    active
-                      ? "border-slate-950 bg-slate-950 text-white"
-                      : "border-slate-200 bg-white text-slate-700"
-                  }`}
-                  onClick={() => setCustomTheme(option.id)}
+                  className="flex min-h-[64px] w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left active:scale-[0.99]"
+                  onClick={() => setSemesterSheet(folder)}
                 >
-                  {option.label}
+                  <span
+                    className="h-10 w-2 rounded-full"
+                    style={{ backgroundColor: folder.color }}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-base font-black text-slate-950">
+                      {folderDisplayName(folder)}
+                    </span>
+                    <span className="block text-sm font-semibold text-slate-500">
+                      Tap to edit
+                    </span>
+                  </span>
+                  <Edit3 className="h-4 w-4 text-slate-400" />
                 </button>
-              );
-            })}
-          </div>
-        </section>
+              ))}
+              {folders.length === 0 && (
+                <p className="rounded-3xl border border-dashed border-slate-300 px-5 py-8 text-center text-base font-semibold text-slate-500">
+                  Add semesters so courses are easier to find.
+                </p>
+              )}
+            </div>
+          </section>
+        </>
       )}
+
+      <MobileSemesterSheet
+        open={semesterSheet != null}
+        onClose={() => setSemesterSheet(null)}
+        folder={semesterSheet === "new" ? null : semesterSheet}
+      />
     </div>
   );
 }
@@ -1235,6 +2282,7 @@ function MobileSettings() {
 export default function MobileApp() {
   const [activeTab, setActiveTab] = useState<MobileTab>("dashboard");
   const [gpaOpen, setGpaOpen] = useState(false);
+  const [courseCreateOpen, setCourseCreateOpen] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
   const appMode = useCourseStore((state) => state.appMode ?? "custom");
   const universityThemeId = useCourseStore(
@@ -1244,6 +2292,13 @@ export default function MobileApp() {
   const activeTheme = getActiveTheme(appMode, universityThemeId, customThemeId);
 
   const showCourseDetail = activeTab === "courses" && selectedCourseId;
+  const activeLabel =
+    mobileTabs.find((tab) => tab.id === activeTab)?.label ?? "MarkMate";
+
+  const openCourse = (courseId: string) => {
+    setActiveTab("courses");
+    setSelectedCourseId(courseId);
+  };
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
@@ -1251,7 +2306,7 @@ export default function MobileApp() {
 
   return (
     <div
-      className="app-shell min-h-[100dvh] bg-slate-50 text-slate-950"
+      className="app-shell min-h-[100dvh] overscroll-none bg-slate-50 text-slate-950"
       data-app-mode={appMode}
       data-theme-id={activeTheme.id}
       style={
@@ -1266,26 +2321,29 @@ export default function MobileApp() {
         } as React.CSSProperties
       }
     >
-      <main className="mx-auto min-h-[100dvh] w-full max-w-md px-5 pb-28 pt-[calc(env(safe-area-inset-top)+0.85rem)]">
+      <main className="mx-auto min-h-[100dvh] w-full max-w-md px-5 pb-28 pt-[calc(env(safe-area-inset-top)+0.6rem)]">
         {!showCourseDetail && (
-          <header className="mb-5 overflow-hidden rounded-[1.75rem] border border-white/70 bg-white/90 shadow-soft backdrop-blur">
-            <div
-              className="h-24 bg-cover bg-center"
-              style={{
-                backgroundImage: activeTheme.backgroundImage
-                  ? `linear-gradient(90deg, rgba(15,23,42,0.68), rgba(15,23,42,0.12)), url(${activeTheme.backgroundImage})`
-                  : `linear-gradient(135deg, var(--theme-primary), var(--theme-accent))`,
-                backgroundPosition: activeTheme.position ?? "center",
-              }}
-            />
-            <div className="-mt-8 flex items-end justify-between gap-4 px-4 pb-4">
-              <div>
-                <MarkMateLogo size="lg" className="ring-4 ring-white" />
-                <p className="mt-3 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+          <header className="sticky top-0 z-20 -mx-5 mb-4 border-b border-white/70 bg-white/86 px-5 pb-3 pt-[calc(env(safe-area-inset-top)+0.6rem)] shadow-[0_16px_42px_-34px_rgba(15,23,42,0.5)] backdrop-blur">
+            <div className="flex items-center gap-3">
+              <MarkMateLogo size="sm" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-black uppercase tracking-[0.18em] text-slate-500">
                   {activeTheme.label}
                 </p>
-                <h1 className="text-2xl font-black tracking-tight">MarkMate</h1>
+                <h1 className="truncate text-xl font-black tracking-tight">
+                  {activeLabel}
+                </h1>
               </div>
+              {(activeTab === "dashboard" || activeTab === "courses") && (
+                <button
+                  type="button"
+                  className="grid min-h-11 min-w-11 place-items-center rounded-2xl bg-slate-950 text-white shadow-soft active:scale-[0.98]"
+                  onClick={() => setCourseCreateOpen(true)}
+                  aria-label="Add course"
+                >
+                  <Plus className="h-5 w-5" />
+                </button>
+              )}
             </div>
           </header>
         )}
@@ -1298,9 +2356,11 @@ export default function MobileApp() {
         ) : activeTab === "dashboard" ? (
           <MobileDashboard
             onOpenGpa={() => setGpaOpen(true)}
-            onOpenCourse={(courseId) => {
-              setActiveTab("courses");
-              setSelectedCourseId(courseId);
+            onOpenCourse={openCourse}
+            onAddCourse={() => setCourseCreateOpen(true)}
+            onGoCalendar={() => {
+              setSelectedCourseId(null);
+              setActiveTab("calendar");
             }}
             onGoCourses={() => {
               setSelectedCourseId(null);
@@ -1308,7 +2368,12 @@ export default function MobileApp() {
             }}
           />
         ) : activeTab === "courses" ? (
-          <MobileCourses onOpenCourse={setSelectedCourseId} />
+          <MobileCourses
+            onOpenCourse={setSelectedCourseId}
+            onAddCourse={() => setCourseCreateOpen(true)}
+          />
+        ) : activeTab === "calendar" ? (
+          <MobileCalendar onOpenCourse={openCourse} />
         ) : activeTab === "gpa" ? (
           <MobileGpa onOpenGpa={() => setGpaOpen(true)} />
         ) : (
@@ -1318,10 +2383,10 @@ export default function MobileApp() {
 
       {!showCourseDetail && (
         <nav
-          className="fixed inset-x-0 bottom-0 z-20 border-t border-white/70 bg-white/90 px-4 pb-[calc(env(safe-area-inset-bottom)+0.65rem)] pt-2 shadow-[0_-18px_44px_-28px_rgba(15,23,42,0.45)] backdrop-blur"
+          className="fixed inset-x-0 bottom-0 z-20 border-t border-white/70 bg-white/90 px-3 pb-[calc(env(safe-area-inset-bottom)+0.55rem)] pt-2 shadow-[0_-18px_44px_-28px_rgba(15,23,42,0.45)] backdrop-blur"
           style={{ position: "fixed", zIndex: 20 }}
         >
-          <div className="mx-auto grid max-w-md grid-cols-4 gap-1">
+          <div className="mx-auto grid max-w-md grid-cols-5 gap-1">
             {mobileTabs.map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.id;
@@ -1329,14 +2394,13 @@ export default function MobileApp() {
                 <button
                   key={tab.id}
                   type="button"
-                  className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl text-xs font-bold transition active:scale-[0.98] ${
-                    active ? "text-white" : "text-slate-500"
+                  className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl text-[0.68rem] font-bold transition focus:outline-none active:scale-[0.98] ${
+                    active ? "text-white" : "bg-transparent text-slate-500"
                   }`}
-                  style={
-                    active
-                      ? { backgroundColor: activeTheme.primaryColor }
-                      : undefined
-                  }
+                  style={{
+                    backgroundColor: active ? activeTheme.primaryColor : "transparent",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
                   onClick={() => {
                     setSelectedCourseId(null);
                     setActiveTab(tab.id);
@@ -1352,6 +2416,11 @@ export default function MobileApp() {
       )}
 
       <MobileGpaSheet open={gpaOpen} onClose={() => setGpaOpen(false)} />
+      <MobileCourseCreateSheet
+        open={courseCreateOpen}
+        onClose={() => setCourseCreateOpen(false)}
+        onCreated={openCourse}
+      />
     </div>
   );
 }

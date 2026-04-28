@@ -10,3 +10,4 @@ vite.config.d.ts
 .env.*
 !.env.example
 .codex*.png
+.codex*.cjs

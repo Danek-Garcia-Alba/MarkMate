@@ -20,6 +20,13 @@ body {
   margin: 0;
 }
 
+@media (max-width: 760px) {
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+}
+
 .app-shell {
   --theme-bg-image: none;
   --theme-primary: #0f172a;
@@ -32,6 +39,7 @@ body {
   position: relative;
   isolation: isolate;
   overflow-x: hidden;
+  overscroll-behavior-y: none;
   background:
     radial-gradient(circle at 18% 8%, color-mix(in srgb, var(--theme-accent) 13%, transparent), transparent 26rem),
     radial-gradient(circle at 92% 18%, color-mix(in srgb, var(--theme-primary) 11%, transparent), transparent 31rem),

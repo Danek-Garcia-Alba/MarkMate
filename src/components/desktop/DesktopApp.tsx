@@ -524,7 +524,7 @@ const STATUS_ORDER: Record<AssignmentStatus, number> = {
   completed: 3,
 };
 
-function normalizeWeightToPercent(raw: number): number {
+export function normalizeWeightToPercent(raw: number): number {
   if (!Number.isFinite(raw)) return 0;
   if (raw <= 1) return clamp(raw * 100);
   return clamp(raw);
@@ -846,13 +846,13 @@ export function gpaSessionRows(report: UniversityGpaReport) {
   );
 }
 
-function formatGradeRange(minPercent: number, maxPercent: number) {
+export function formatGradeRange(minPercent: number, maxPercent: number) {
   const min = Math.ceil(minPercent);
   const max = maxPercent >= 99.999 ? 100 : Math.floor(maxPercent);
   return min === max ? `${min}%` : `${min}-${max}%`;
 }
 
-function formatScaleValue(value: number) {
+export function formatScaleValue(value: number) {
   return Number(value.toFixed(2)).toString();
 }
 
@@ -961,7 +961,7 @@ function clearInvalidCourseSemesters(courses: Course[], folders: CourseFolder[])
   );
 }
 
-type PassPlanResult = {
+export type PassPlanResult = {
   target: number;
   selectedWeight: number;
   knownEarned: number;
@@ -971,7 +971,7 @@ type PassPlanResult = {
   alreadySafe: boolean;
 };
 
-function calculatePassPlan(
+export function calculatePassPlan(
   course: Course,
   selectedIds: Set<string>,
   target: number
@@ -1012,7 +1012,7 @@ function stripLeadingZerosInput(s: string): string {
   return s;
 }
 
-function parseFlexibleNumber(input: string): number | null {
+export function parseFlexibleNumber(input: string): number | null {
   const raw = input.trim().replace(/,/g, "").replace(/%/g, "");
   if (!raw) return null;
 
@@ -1032,7 +1032,7 @@ function parseFlexibleNumber(input: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function parseGradeInput(input: string): number | null {
+export function parseGradeInput(input: string): number | null {
   const raw = input.trim();
   const n = parseFlexibleNumber(raw);
   if (n == null) return null;
