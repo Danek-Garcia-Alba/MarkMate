@@ -498,6 +498,103 @@ const CUSTOM_THEMES: Record<CustomThemeId, CustomTheme> = {
 
 const CUSTOM_THEME_OPTIONS = Object.values(CUSTOM_THEMES);
 
+type MarkMateBrandPalette = {
+  logoPrimary: string;
+  logoAccent: string;
+  wordStart: string;
+  wordMid: string;
+  wordEnd: string;
+};
+
+const CUSTOM_MARKMATE_BRAND: MarkMateBrandPalette = {
+  logoPrimary: "#fb7185",
+  logoAccent: "#34d399",
+  wordStart: "#ec4899",
+  wordMid: "#fb7185",
+  wordEnd: "#10b981",
+};
+
+const UNIVERSITY_MARKMATE_BRANDS: Record<UniversityThemeId, MarkMateBrandPalette> = {
+  markmate: CUSTOM_MARKMATE_BRAND,
+  uoft: {
+    logoPrimary: "#002A5C",
+    logoAccent: "#0ea5e9",
+    wordStart: "#002A5C",
+    wordMid: "#0369a1",
+    wordEnd: "#0ea5e9",
+  },
+  western: {
+    logoPrimary: "#4F2683",
+    logoAccent: "#b7a6d8",
+    wordStart: "#4F2683",
+    wordMid: "#6d28d9",
+    wordEnd: "#b7a6d8",
+  },
+  queens: {
+    logoPrimary: "#00305E",
+    logoAccent: "#FDB515",
+    wordStart: "#00305E",
+    wordMid: "#B90E31",
+    wordEnd: "#C99700",
+  },
+  york: {
+    logoPrimary: "#E31837",
+    logoAccent: "#111827",
+    wordStart: "#E31837",
+    wordMid: "#9f1239",
+    wordEnd: "#111827",
+  },
+  tmu: {
+    logoPrimary: "#0055A4",
+    logoAccent: "#FFD200",
+    wordStart: "#0055A4",
+    wordMid: "#0077C8",
+    wordEnd: "#C99700",
+  },
+  waterloo: {
+    logoPrimary: "#111827",
+    logoAccent: "#F2C300",
+    wordStart: "#111827",
+    wordMid: "#D69E00",
+    wordEnd: "#F2C300",
+  },
+  laurier: {
+    logoPrimary: "#4B2682",
+    logoAccent: "#FDB913",
+    wordStart: "#4B2682",
+    wordMid: "#6d28d9",
+    wordEnd: "#C99700",
+  },
+  brock: {
+    logoPrimary: "#D71920",
+    logoAccent: "#64748b",
+    wordStart: "#D71920",
+    wordMid: "#991b1b",
+    wordEnd: "#475569",
+  },
+  guelph: {
+    logoPrimary: "#123D2A",
+    logoAccent: "#D4AF37",
+    wordStart: "#123D2A",
+    wordMid: "#7A0019",
+    wordEnd: "#A47D12",
+  },
+  uottawa: {
+    logoPrimary: "#8A1538",
+    logoAccent: "#94a3b8",
+    wordStart: "#8A1538",
+    wordMid: "#111827",
+    wordEnd: "#64748b",
+  },
+  mcgill: {
+    logoPrimary: "#ED1B2F",
+    logoAccent: "#64748b",
+    wordStart: "#ED1B2F",
+    wordMid: "#9f1239",
+    wordEnd: "#475569",
+  },
+};
+
 export function getActiveTheme(
   appMode: AppMode,
   universityThemeId: UniversityThemeId,
@@ -508,6 +605,19 @@ export function getActiveTheme(
     return UNIVERSITY_THEMES[id] ?? UNIVERSITY_THEMES.uoft;
   }
   return CUSTOM_THEMES[customThemeId] ?? CUSTOM_THEMES.classic;
+}
+
+export function getMarkMateBrandPalette(
+  appMode: string,
+  universityThemeId: string,
+  _customThemeId: string
+): MarkMateBrandPalette {
+  if (appMode !== "university") return CUSTOM_MARKMATE_BRAND;
+  const id = universityThemeId === "markmate" ? "uoft" : universityThemeId;
+  return (
+    UNIVERSITY_MARKMATE_BRANDS[id as UniversityThemeId] ??
+    UNIVERSITY_MARKMATE_BRANDS.uoft
+  );
 }
 
 const STATUS_LABEL: Record<AssignmentStatus, string> = {
@@ -5413,6 +5523,11 @@ function WelcomeHome({
   const selectedUniversityTheme =
     UNIVERSITY_THEMES[universityThemeId === "markmate" ? "uoft" : universityThemeId];
   const selectedCustomTheme = CUSTOM_THEMES[customThemeId];
+  const brandPalette = getMarkMateBrandPalette(
+    appMode,
+    universityThemeId,
+    customThemeId
+  );
 
   return (
     <main className="home-page relative mx-auto max-w-7xl px-4 py-8 md:py-10">
@@ -5425,7 +5540,12 @@ function WelcomeHome({
             </div>
             <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
               Welcome to{" "}
-              <span className="bg-gradient-to-r from-slate-950 via-sky-700 to-slate-700 bg-clip-text text-transparent">
+              <span
+                className="bg-clip-text text-transparent"
+                style={{
+                  backgroundImage: `linear-gradient(90deg, ${brandPalette.wordStart}, ${brandPalette.wordMid}, ${brandPalette.wordEnd})`,
+                }}
+              >
                 MarkMate
               </span>
             </h1>
@@ -5456,7 +5576,12 @@ function WelcomeHome({
             </div>
           </div>
           <div className="w-full space-y-4">
-            <div className="home-preview-card rounded-lg border border-slate-200 bg-gradient-to-br from-slate-50 via-sky-50 to-white p-6 dark:border-slate-800 dark:from-slate-900 dark:via-slate-900 dark:to-slate-900">
+            <div
+              className="home-preview-card rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900"
+              style={{
+                backgroundImage: `linear-gradient(135deg, color-mix(in srgb, ${brandPalette.wordStart} 10%, white), color-mix(in srgb, ${brandPalette.wordMid} 8%, white) 48%, color-mix(in srgb, ${brandPalette.wordEnd} 12%, white))`,
+              }}
+            >
               <div className="flex items-center gap-4">
                 <Donut value={72} size={106} label="Ready" />
                 <div className="min-w-0">
@@ -5649,6 +5774,11 @@ export default function DesktopApp() {
   const setCustomTheme = useCourseStore((s) => s.setCustomTheme);
   const selectedCourse = courses.find((course) => course.id === selectedCourseId);
   const activeTheme = getActiveTheme(appMode, universityThemeId, customThemeId);
+  const brandPalette = getMarkMateBrandPalette(
+    appMode,
+    universityThemeId,
+    customThemeId
+  );
 
   useEffect(() => {
     if (appMode !== "university" || hasLockedUniversitySemesters(folders)) {
@@ -5704,6 +5834,11 @@ export default function DesktopApp() {
           "--theme-accent": activeTheme.accentColor,
           "--theme-overlay": activeTheme.overlay,
           "--theme-bg-position": activeTheme.position ?? "left top",
+          "--markmate-logo-primary": brandPalette.logoPrimary,
+          "--markmate-logo-accent": brandPalette.logoAccent,
+          "--markmate-word-start": brandPalette.wordStart,
+          "--markmate-word-mid": brandPalette.wordMid,
+          "--markmate-word-end": brandPalette.wordEnd,
         } as React.CSSProperties
       }
     >

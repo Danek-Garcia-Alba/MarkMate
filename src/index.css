@@ -444,8 +444,8 @@ textarea {
   content: "";
   pointer-events: none;
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 10%, transparent), transparent 32%),
-    linear-gradient(45deg, transparent 58%, color-mix(in srgb, var(--theme-accent) 12%, transparent));
+    linear-gradient(135deg, color-mix(in srgb, var(--markmate-word-start, #ec4899) 11%, transparent), transparent 32%),
+    linear-gradient(45deg, transparent 58%, color-mix(in srgb, var(--markmate-word-end, #10b981) 12%, transparent));
 }
 
 .old-home-card > * {

@@ -20,14 +20,14 @@ export function MarkMateLogo({
       aria-hidden="true"
       style={{
         background:
-          "linear-gradient(145deg, #020617 0%, color-mix(in srgb, var(--theme-primary, #0f172a) 42%, #0f172a) 58%, #111827 100%)",
+          "linear-gradient(145deg, #020617 0%, color-mix(in srgb, var(--markmate-logo-primary, #fb7185) 42%, #0f172a) 58%, #111827 100%)",
       }}
     >
       <span
         className="absolute inset-x-0 bottom-0 h-[18%]"
         style={{
           background:
-            "linear-gradient(90deg, var(--theme-primary, #0ea5e9), var(--theme-accent, #38bdf8))",
+            "linear-gradient(90deg, var(--markmate-logo-primary, #fb7185), var(--markmate-logo-accent, #34d399))",
         }}
       />
       <svg
@@ -53,7 +53,7 @@ export function MarkMateLogo({
         />
         <path
           d="M13 32h16"
-          stroke="var(--theme-accent, #38bdf8)"
+          stroke="var(--markmate-logo-accent, #34d399)"
           strokeWidth="3.4"
           strokeLinecap="round"
         />

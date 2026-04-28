@@ -35,6 +35,7 @@ import {
   formatScaleValue,
   formatSchoolAverage,
   getActiveTheme,
+  getMarkMateBrandPalette,
   gpaSessionRows,
   gpaWaitingCourseCount,
   gpaYearRows,
@@ -579,9 +580,14 @@ function MobileIdentityCard({
   );
   const customThemeId = useCourseStore((state) => state.customThemeId ?? "classic");
   const activeTheme = getActiveTheme(appMode, universityThemeId, customThemeId);
+  const brandPalette = getMarkMateBrandPalette(
+    appMode,
+    universityThemeId,
+    customThemeId
+  );
   const imageLayer = activeTheme.backgroundImage
     ? `linear-gradient(90deg, rgba(15,23,42,0.86), rgba(15,23,42,0.46)), url(${activeTheme.backgroundImage})`
-    : "linear-gradient(135deg, #020617, #0f172a 62%, #1e293b)";
+    : `linear-gradient(135deg, color-mix(in srgb, ${brandPalette.logoPrimary} 34%, #020617), #0f172a 58%, color-mix(in srgb, ${brandPalette.logoAccent} 28%, #1e293b))`;
 
   return (
     <section
@@ -2544,6 +2550,11 @@ export default function MobileApp() {
   );
   const customThemeId = useCourseStore((state) => state.customThemeId ?? "classic");
   const activeTheme = getActiveTheme(appMode, universityThemeId, customThemeId);
+  const brandPalette = getMarkMateBrandPalette(
+    appMode,
+    universityThemeId,
+    customThemeId
+  );
 
   const showCourseDetail = activeTab === "courses" && selectedCourseId;
   const activeLabel =
@@ -2588,6 +2599,11 @@ export default function MobileApp() {
           "--theme-accent": activeTheme.accentColor,
           "--theme-overlay": activeTheme.overlay,
           "--theme-bg-position": activeTheme.position ?? "left top",
+          "--markmate-logo-primary": brandPalette.logoPrimary,
+          "--markmate-logo-accent": brandPalette.logoAccent,
+          "--markmate-word-start": brandPalette.wordStart,
+          "--markmate-word-mid": brandPalette.wordMid,
+          "--markmate-word-end": brandPalette.wordEnd,
         } as React.CSSProperties
       }
     >
