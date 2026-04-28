@@ -187,7 +187,7 @@ type CustomTheme = {
   position?: string;
 };
 
-const GPA_POLICY_EXPLANATIONS: Record<
+export const GPA_POLICY_EXPLANATIONS: Record<
   UniversityId,
   {
     title: string;
@@ -500,7 +500,7 @@ const CUSTOM_THEMES: Record<CustomThemeId, CustomTheme> = {
 
 const CUSTOM_THEME_OPTIONS = Object.values(CUSTOM_THEMES);
 
-function getActiveTheme(
+export function getActiveTheme(
   appMode: AppMode,
   universityThemeId: UniversityThemeId,
   customThemeId: CustomThemeId
@@ -601,7 +601,7 @@ function nextDue(assignments: Assignment[]): Assignment | null {
   return upcoming[0] ?? null;
 }
 
-function calcMetrics(course: Course) {
+export function calcMetrics(course: Course) {
   const completedAssignments = course.assignments.filter(
     (a) => a.status === "completed"
   );
@@ -634,7 +634,7 @@ function calcMetrics(course: Course) {
   };
 }
 
-function selectedUniversityId(themeId: UniversityThemeId): UniversityId {
+export function selectedUniversityId(themeId: UniversityThemeId): UniversityId {
   return themeId === "markmate" ? "uoft" : themeId;
 }
 
@@ -675,7 +675,7 @@ function deriveCourseFinalPercent(course: Course): number | null {
   return clamp(weightedGradeTotal / totalWeight);
 }
 
-function buildCourseGradeRecords(
+export function buildCourseGradeRecords(
   courses: Course[],
   foldersById: Map<string, CourseFolder>,
   universityId: UniversityId
@@ -704,13 +704,13 @@ function buildCourseGradeRecords(
   });
 }
 
-function formatSchoolAverage(report: UniversityGpaReport) {
+export function formatSchoolAverage(report: UniversityGpaReport) {
   return report.cumulative.displayAverage == null
     ? "--"
     : formatAverage(report.cumulative);
 }
 
-function gpaWaitingCourseCount(report: UniversityGpaReport) {
+export function gpaWaitingCourseCount(report: UniversityGpaReport) {
   return report.cumulative.excludedCourses.filter((item) =>
     /not completed|No final grade|missing or zero/i.test(item.reason)
   ).length;
@@ -720,7 +720,7 @@ function hasAverageCourses(result: AverageResult) {
   return result.includedCourses.length > 0;
 }
 
-function formatCredits(value: number) {
+export function formatCredits(value: number) {
   return Number(value.toFixed(2)).toString();
 }
 
@@ -728,14 +728,14 @@ function formatCourseCount(value: number) {
   return `${value} ${value === 1 ? "course" : "courses"}`;
 }
 
-function averageDetail(result: AverageResult) {
+export function averageDetail(result: AverageResult) {
   if (!hasAverageCourses(result)) return "No final courses yet";
   return `${formatCourseCount(result.includedCourses.length)}, ${formatCredits(
     result.creditsIncluded
   )} credits`;
 }
 
-function gpaYearRows(report: UniversityGpaReport) {
+export function gpaYearRows(report: UniversityGpaReport) {
   return report.years
     .map((yearResult) => {
       const result =
@@ -751,7 +751,7 @@ function gpaYearRows(report: UniversityGpaReport) {
     .filter(({ result }) => hasAverageCourses(result));
 }
 
-function gpaSessionRows(report: UniversityGpaReport) {
+export function gpaSessionRows(report: UniversityGpaReport) {
   return report.years.flatMap((yearResult) =>
     [
       { key: "fall", label: `Year ${yearResult.year} Fall`, result: yearResult.fall },
