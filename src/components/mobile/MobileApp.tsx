@@ -3174,30 +3174,30 @@ function MobileCalendar({
     .slice(0, 6);
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
-        <div className="flex items-center justify-between gap-4">
+    <div className="space-y-3">
+      <section className="rounded-[1.65rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
+        <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-xs font-black uppercase tracking-wide text-slate-500">
               Calendar
             </p>
-            <h1 className="mt-1 text-2xl font-black tracking-tight">
+            <h1 className="mt-0.5 text-xl font-black tracking-tight">
               Deadlines
             </h1>
           </div>
           <button
             type="button"
-            className="grid min-h-12 min-w-12 place-items-center rounded-2xl bg-slate-950 text-white shadow-soft active:scale-[0.98]"
+            className="grid min-h-11 min-w-11 place-items-center rounded-2xl bg-slate-950 text-white shadow-soft active:scale-[0.98]"
             onClick={() => setQuickOpen(true)}
             aria-label="Add deadline"
           >
             <Plus className="h-5 w-5" />
           </button>
         </div>
-        <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl bg-slate-100 p-1.5">
+        <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-slate-100 p-1">
           <button
             type="button"
-            className="grid min-h-11 min-w-11 place-items-center rounded-xl bg-white text-slate-700 shadow-soft active:scale-[0.98]"
+            className="grid min-h-10 min-w-10 place-items-center rounded-xl bg-white text-slate-700 shadow-soft active:scale-[0.98]"
             onClick={() =>
               setActiveMonth(
                 new Date(activeMonth.getFullYear(), activeMonth.getMonth() - 1, 1)
@@ -3205,14 +3205,14 @@ function MobileCalendar({
             }
             aria-label="Previous month"
           >
-            <ChevronLeft className="h-5 w-5" />
+            <ChevronLeft className="h-4 w-4" />
           </button>
           <p className="text-base font-black text-slate-950">
             {monthTitle(activeMonth)}
           </p>
           <button
             type="button"
-            className="grid min-h-11 min-w-11 place-items-center rounded-xl bg-white text-slate-700 shadow-soft active:scale-[0.98]"
+            className="grid min-h-10 min-w-10 place-items-center rounded-xl bg-white text-slate-700 shadow-soft active:scale-[0.98]"
             onClick={() =>
               setActiveMonth(
                 new Date(activeMonth.getFullYear(), activeMonth.getMonth() + 1, 1)
@@ -3220,18 +3220,18 @@ function MobileCalendar({
             }
             aria-label="Next month"
           >
-            <ChevronRight className="h-5 w-5" />
+            <ChevronRight className="h-4 w-4" />
           </button>
         </div>
         {calendarScopes.length > 2 && (
-          <div className="-mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
+          <div className="-mx-0.5 mt-2 flex gap-1.5 overflow-x-auto px-0.5 pb-1">
             {calendarScopes.map((scope) => {
               const active = filter === scope.id;
               return (
                 <button
                   key={scope.id}
                   type="button"
-                  className={`min-h-10 shrink-0 rounded-2xl px-4 text-sm font-black ${
+                  className={`min-h-9 shrink-0 rounded-2xl px-3 text-xs font-black ${
                     active
                       ? "bg-slate-950 text-white"
                       : "border border-slate-200 bg-white text-slate-600"
@@ -3244,9 +3244,9 @@ function MobileCalendar({
             })}
           </div>
         )}
-        <div className="mt-4 grid grid-cols-7 gap-1 text-center text-xs font-black uppercase tracking-wide text-slate-400">
+        <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[0.68rem] font-black uppercase tracking-wide text-slate-400">
           {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
-            <div key={`${day}-${index}`} className="py-1">
+            <div key={`${day}-${index}`} className="py-0.5">
               {day}
             </div>
           ))}
@@ -3262,7 +3262,7 @@ function MobileCalendar({
               <button
                 key={iso}
                 type="button"
-                className={`relative grid min-h-11 place-items-center rounded-2xl text-sm font-black transition active:scale-[0.96] ${
+                className={`relative grid aspect-square min-h-0 place-items-center rounded-xl text-sm font-black transition active:scale-[0.96] ${
                   isSelected
                     ? "bg-slate-950 text-white"
                     : isToday
@@ -3284,23 +3284,23 @@ function MobileCalendar({
           })}
         </div>
 
-        <div className="mt-4 rounded-[1.6rem] bg-slate-950 p-3 text-white">
+        <div className="mt-3 rounded-[1.35rem] bg-slate-950 p-3 text-white">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-black uppercase tracking-wide text-white/45">
                 Agenda
               </p>
-              <h2 className="mt-1 truncate text-lg font-black">
+              <h2 className="mt-0.5 truncate text-base font-black">
                 {formatLongDate(selectedDate)}
               </h2>
             </div>
             <button
               type="button"
-              className="grid min-h-10 min-w-10 place-items-center rounded-2xl bg-white text-slate-950 active:scale-[0.98]"
+              className="grid min-h-9 min-w-9 place-items-center rounded-xl bg-white text-slate-950 active:scale-[0.98]"
               onClick={() => setQuickOpen(true)}
               aria-label="Add deadline"
             >
-              <Plus className="h-5 w-5" />
+              <Plus className="h-4 w-4" />
             </button>
           </div>
           <div className="mt-3 space-y-2">
@@ -3319,7 +3319,7 @@ function MobileCalendar({
             {selectedItems.length === 0 && (
               <button
                 type="button"
-                className="min-h-16 w-full rounded-2xl border border-white/12 bg-white/8 px-4 text-left text-base font-black text-white/72 active:scale-[0.99]"
+                className="min-h-12 w-full rounded-2xl border border-white/12 bg-white/8 px-3 text-left text-sm font-black text-white/72 active:scale-[0.99]"
                 onClick={() => setQuickOpen(true)}
               >
                 No deadlines. Tap to add one.
@@ -3329,7 +3329,7 @@ function MobileCalendar({
         </div>
       </section>
 
-      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+      <section className="rounded-[1.65rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-black uppercase tracking-wide text-slate-500">
             Up next
@@ -4231,7 +4231,9 @@ export default function MobileApp() {
       }
     >
       <main
-        className={`mx-auto min-h-[100dvh] w-full max-w-md px-5 pt-[calc(env(safe-area-inset-top)+0.6rem)] ${
+        className={`mx-auto min-h-[100dvh] w-full max-w-md px-5 ${
+          showCourseDetail ? "pt-[calc(env(safe-area-inset-top)+0.6rem)]" : "pt-0"
+        } ${
           keyboardOpen ? "pb-8" : "pb-[calc(env(safe-area-inset-bottom)+7rem)]"
         }`}
         style={{ touchAction: "pan-y" }}
