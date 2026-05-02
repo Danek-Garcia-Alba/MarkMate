@@ -1498,7 +1498,7 @@ function MobileCourses({
             onBlur={settleMobileInputAfterBlur}
           />
         </label>
-        {!query.trim() && (
+        {!query.trim() && courses.length > 0 && (
           <button
             type="button"
             className="mobile-glow-action mt-2 flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-left active:scale-[0.99]"
