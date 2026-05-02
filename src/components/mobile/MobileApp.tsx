@@ -50,7 +50,6 @@ import {
   type AssignmentStatus,
   type Course,
   type CourseFolder,
-  type PassPlanResult,
 } from "../desktop/DesktopApp";
 import { MarkMateLogo } from "../MarkMateLogo";
 import {
@@ -127,11 +126,6 @@ function campusBubblePosition(themeId: string) {
   return "76% center";
 }
 
-function schoolLogoPosition(themeId: string) {
-  if (themeId === "uoft") return "left 47%";
-  return "left center";
-}
-
 function folderSort(a: CourseFolder, b: CourseFolder) {
   const yearA = semesterYears.indexOf(a.year as (typeof semesterYears)[number]);
   const yearB = semesterYears.indexOf(b.year as (typeof semesterYears)[number]);
@@ -196,6 +190,29 @@ function parseMobileStatus(value: string): AssignmentStatus {
     return v;
   }
   return "not_started";
+}
+
+function schoolMarkLetters(themeId: string, label: string) {
+  const marks: Record<string, string> = {
+    uoft: "UT",
+    western: "W",
+    queens: "Q",
+    york: "Y",
+    tmu: "TM",
+    waterloo: "UW",
+    laurier: "WL",
+    brock: "B",
+    guelph: "G",
+    uottawa: "OU",
+    mcgill: "M",
+  };
+  if (marks[themeId]) return marks[themeId];
+  return label
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 }
 
 function useGpaReport() {
@@ -418,17 +435,22 @@ function MobileSchoolMark({
     return <MarkMateLogo size="sm" className={className} />;
   }
 
+  const letters = schoolMarkLetters(themeId, label);
+
   return (
     <span
-      className={`grid h-14 w-20 shrink-0 place-items-center overflow-hidden rounded-[1.15rem] border border-white/35 bg-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.45),0_18px_34px_-28px_rgba(15,23,42,0.65)] ${className}`}
+      className={`relative grid h-14 w-20 shrink-0 place-items-center overflow-hidden rounded-[1.15rem] border border-white/35 bg-slate-950 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_18px_34px_-28px_rgba(15,23,42,0.65)] ${className}`}
       style={{
-        backgroundImage: `linear-gradient(90deg, rgba(2,6,23,0.04), rgba(255,255,255,0.1)), url(${image})`,
-        backgroundPosition: schoolLogoPosition(themeId),
-        backgroundSize: "430px auto",
+        backgroundImage:
+          "radial-gradient(circle at 18% 16%, color-mix(in srgb, var(--theme-accent) 48%, white), transparent 28%), linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 92%, #020617), color-mix(in srgb, var(--theme-accent) 42%, #0f172a))",
       }}
       role="img"
       aria-label={`${label} logo`}
-    />
+    >
+      <span className="absolute inset-x-2 top-2 h-px rounded-full bg-white/35" />
+      <span className="text-xl font-black tracking-tight">{letters}</span>
+      <span className="absolute bottom-2 h-1 w-9 rounded-full bg-white/70" />
+    </span>
   );
 }
 
@@ -668,7 +690,7 @@ function EmptyCourses({ onAddCourse }: { onAddCourse: () => void }) {
       </p>
       <button
         type="button"
-        className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-base font-bold text-white shadow-soft active:scale-[0.98]"
+        className="mobile-glow-action mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-bold active:scale-[0.98]"
         onClick={onAddCourse}
       >
         <Plus className="h-5 w-5" />
@@ -850,7 +872,7 @@ function MobileHomeCommandPanel({
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button
           type="button"
-          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-3 text-base font-black text-white active:scale-[0.98]"
+          className="mobile-glow-action inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-3 text-base font-black active:scale-[0.98]"
           onClick={onAddCourse}
         >
           <Plus className="h-5 w-5" />
@@ -1128,7 +1150,7 @@ function MobileCourses({
             </div>
             <button
               type="button"
-              className="grid min-h-11 min-w-11 place-items-center rounded-2xl bg-slate-950 text-white active:scale-[0.98]"
+              className="mobile-glow-action grid min-h-11 min-w-11 place-items-center rounded-2xl active:scale-[0.98]"
               onClick={() => onAddCourse(folderId)}
               aria-label="Add course"
             >
@@ -1148,7 +1170,7 @@ function MobileCourses({
             </p>
             <button
               type="button"
-              className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-base font-black text-white active:scale-[0.98]"
+              className="mobile-glow-action mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-black active:scale-[0.98]"
               onClick={() => onAddCourse(folderId)}
             >
               <Plus className="h-5 w-5" />
@@ -1183,14 +1205,6 @@ function MobileCourses({
               Your classes
             </h1>
           </div>
-          <button
-            type="button"
-            className="grid min-h-12 min-w-12 place-items-center rounded-2xl bg-slate-950 text-white shadow-soft active:scale-[0.98]"
-            onClick={() => onAddCourse()}
-            aria-label="Add course"
-          >
-            <Plus className="h-5 w-5" />
-          </button>
         </div>
         <label className="relative mt-4 block">
           <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
@@ -1204,7 +1218,7 @@ function MobileCourses({
         {!query.trim() && (
           <button
             type="button"
-            className="mt-3 flex min-h-[64px] w-full items-center gap-3 rounded-2xl bg-slate-950 px-4 py-3 text-left text-white active:scale-[0.99]"
+            className="mobile-glow-action mt-3 flex min-h-[64px] w-full items-center gap-3 rounded-2xl px-4 py-3 text-left active:scale-[0.99]"
             onClick={() => onAddCourse()}
           >
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/12">
@@ -1355,7 +1369,7 @@ function MobileCourseCreateSheet({
         </MobileField>
         <button
           type="button"
-          className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-base font-bold text-white shadow-soft active:scale-[0.98]"
+          className="mobile-glow-action inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-bold active:scale-[0.98]"
           onClick={submit}
         >
           <Plus className="h-5 w-5" />
@@ -1608,23 +1622,14 @@ function MobileAssignmentComposer({
               />
             </MobileField>
           </div>
-          <div className="grid grid-cols-[1fr_auto] gap-3">
-            <MobileField label="Due">
-              <input
-                className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
-                type="date"
-                value={dueDate}
-                onChange={(event) => setDueDate(event.target.value)}
-              />
-            </MobileField>
-            <button
-              type="button"
-              className="mt-8 min-h-12 rounded-2xl border border-slate-200 bg-white px-4 text-base font-black text-slate-500 active:scale-[0.98]"
-              onClick={onClose}
-            >
-              Cancel
-            </button>
-          </div>
+          <MobileField label="Due">
+            <input
+              className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+              type="date"
+              value={dueDate}
+              onChange={(event) => setDueDate(event.target.value)}
+            />
+          </MobileField>
           <MobileField label="Status">
             <select
               className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
@@ -1640,7 +1645,7 @@ function MobileAssignmentComposer({
           </MobileField>
           <button
             type="button"
-            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-base font-black text-white shadow-soft active:scale-[0.98]"
+            className="mobile-glow-action inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-black active:scale-[0.98]"
             onClick={saveSingle}
           >
             <Check className="h-5 w-5" />
@@ -1709,7 +1714,7 @@ function MobileAssignmentComposer({
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <button
               type="button"
               className="min-h-11 rounded-2xl border border-slate-200 bg-white px-4 text-base font-black text-slate-600 active:scale-[0.98]"
@@ -1717,17 +1722,10 @@ function MobileAssignmentComposer({
             >
               Row
             </button>
-            <button
-              type="button"
-              className="min-h-11 rounded-2xl border border-slate-200 bg-white px-4 text-base font-black text-slate-600 active:scale-[0.98]"
-              onClick={onClose}
-            >
-              Cancel
-            </button>
           </div>
           <button
             type="button"
-            className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-base font-black text-white shadow-soft active:scale-[0.98]"
+            className="mobile-glow-action inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-black active:scale-[0.98]"
             onClick={saveBulk}
           >
             <ListPlus className="h-5 w-5" />
@@ -1894,31 +1892,6 @@ function MobileAssignmentSheet({
   );
 }
 
-function MobilePassResult({ result }: { result: PassPlanResult }) {
-  if (result.alreadySafe) {
-    return (
-      <p className="rounded-3xl bg-emerald-50 p-4 text-base font-bold leading-relaxed text-emerald-700">
-        You are already at the target. The selected work can average 0% and the
-        projected mark stays around {formatPercent(result.projectedMark)}.
-      </p>
-    );
-  }
-  if (!result.possible) {
-    return (
-      <p className="rounded-3xl bg-rose-50 p-4 text-base font-bold leading-relaxed text-rose-700">
-        You would need about {formatPercent(result.neededEach)} on the selected
-        work, so this target is not reachable with only those items.
-      </p>
-    );
-  }
-  return (
-    <p className="rounded-3xl bg-emerald-50 p-4 text-base font-bold leading-relaxed text-emerald-700">
-      Average about {formatPercent(result.neededEach)} on the selected work to
-      land near {formatPercent(result.target)}.
-    </p>
-  );
-}
-
 function MobilePassHelperSheet({
   open,
   onClose,
@@ -1952,41 +1925,65 @@ function MobilePassHelperSheet({
 
   return (
     <MobileBottomSheet title="Need to pass" open={open} onClose={onClose}>
-      <div className="space-y-4">
-        <div className="rounded-3xl bg-slate-950 p-5 text-white">
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-white/55">
-            What do I need?
-          </p>
-          <p className="mt-3 text-base leading-relaxed text-white/70">
-            Pick the assignments you still control and set the target final
-            mark.
-          </p>
-        </div>
-        <MobileField label="Target final mark">
-          <input
-            className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
-            inputMode="decimal"
-            value={targetDraft}
-            onChange={(event) => setTargetDraft(event.target.value)}
-            placeholder="50"
-          />
-        </MobileField>
+      <div className="space-y-3">
+        <section className="rounded-3xl bg-slate-950 p-4 text-white">
+          <div className="grid grid-cols-[1fr_6.5rem] gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-white/50">
+                Target
+              </p>
+              <p className="mt-2 text-base font-bold leading-snug text-white/68">
+                Select unfinished work.
+              </p>
+            </div>
+            <label className="block text-xs font-black uppercase tracking-wide text-white/45">
+              Final
+              <input
+                className="mt-2 min-h-12 w-full rounded-2xl border border-white/10 bg-white px-3 text-center text-xl font-black text-slate-950 outline-none focus:ring-2 focus:ring-white/25"
+                inputMode="decimal"
+                value={targetDraft}
+                onChange={(event) => setTargetDraft(event.target.value)}
+                placeholder="50"
+              />
+            </label>
+          </div>
+          {weightsReady && result && (
+            <div
+              className={`mt-3 rounded-2xl px-4 py-3 text-base font-black leading-snug ${
+                result.alreadySafe || result.possible
+                  ? "bg-emerald-400/14 text-emerald-100"
+                  : "bg-rose-400/14 text-rose-100"
+              }`}
+            >
+              {result.alreadySafe
+                ? `Already safe near ${formatPercent(result.projectedMark)}.`
+                : result.possible
+                ? `Need about ${formatPercent(result.neededEach)} on selected work.`
+                : `${formatPercent(result.neededEach)} needed is not reachable here.`}
+            </div>
+          )}
+          {weightsReady && !result && (
+            <p className="mt-3 rounded-2xl bg-white/8 px-4 py-3 text-sm font-bold text-white/65">
+              Select at least one assignment.
+            </p>
+          )}
+        </section>
 
         {!weightsReady && (
-          <p className="rounded-3xl bg-amber-50 p-4 text-base font-bold leading-relaxed text-amber-800">
+          <p className="rounded-2xl bg-amber-50 p-4 text-base font-bold leading-relaxed text-amber-800">
             This calculator needs the course weights to total 100%. Right now
             they total {formatPercent(metrics.totalWeights)}.
           </p>
         )}
 
-        <div className="space-y-2">
+        <div className="max-h-[38dvh] space-y-2 overflow-y-auto overscroll-contain pr-1">
           {course.assignments.map((assignment) => {
             const active = selectedIds.has(assignment.id);
             return (
               <button
                 key={assignment.id}
                 type="button"
-                className={`flex min-h-[68px] w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left active:scale-[0.99] ${
+                className={`flex min-h-[58px] w-full items-center gap-3 rounded-2xl border px-3 py-2 text-left active:scale-[0.99] ${
                   active
                     ? "border-slate-950 bg-slate-950 text-white"
                     : "border-slate-200 bg-white text-slate-900"
@@ -1999,7 +1996,7 @@ function MobilePassHelperSheet({
                     return next;
                   })
                 }
-              >
+                >
                 <span
                   className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border ${
                     active
@@ -2026,13 +2023,6 @@ function MobilePassHelperSheet({
             );
           })}
         </div>
-
-        {weightsReady && result && <MobilePassResult result={result} />}
-        {weightsReady && !result && (
-          <p className="rounded-3xl border border-dashed border-slate-300 p-4 text-center text-base font-semibold text-slate-500">
-            Select at least one assignment to calculate.
-          </p>
-        )}
       </div>
     </MobileBottomSheet>
   );
@@ -2089,8 +2079,16 @@ function MobileCourseDetail({
           <button
             type="button"
             className="grid min-h-11 min-w-11 place-items-center rounded-2xl bg-slate-950 text-white active:scale-[0.98]"
-            onClick={onBack}
-            aria-label="Back to courses"
+            onClick={() => {
+              if (assignmentComposerMode) {
+                setAssignmentComposerMode(null);
+                return;
+              }
+              onBack();
+            }}
+            aria-label={
+              assignmentComposerMode ? "Close assignment form" : "Back to courses"
+            }
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
@@ -2123,24 +2121,29 @@ function MobileCourseDetail({
             </p>
             <h2 className="text-xl font-black tracking-tight">Grades and tasks</h2>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              className="grid min-h-11 min-w-11 place-items-center rounded-2xl bg-slate-950 text-white shadow-soft active:scale-[0.98]"
-              onClick={() => setAssignmentComposerMode("single")}
-              aria-label="Add assignment"
-            >
-              <Plus className="h-5 w-5" />
-            </button>
-            <button
-              type="button"
-              className="grid min-h-11 min-w-11 place-items-center rounded-2xl border border-slate-200 bg-white text-slate-600 active:scale-[0.98]"
-              onClick={() => setAssignmentComposerMode("bulk")}
-              aria-label="Add assignments in bulk"
-            >
-              <ListPlus className="h-5 w-5" />
-            </button>
-          </div>
+          <button
+            type="button"
+            className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-4 text-sm font-black active:scale-[0.98] ${
+              assignmentComposerMode
+                ? "border border-slate-200 bg-white text-slate-600"
+                : "mobile-glow-action"
+            }`}
+            onClick={() =>
+              assignmentComposerMode
+                ? setAssignmentComposerMode(null)
+                : setAssignmentComposerMode("single")
+            }
+            aria-label={
+              assignmentComposerMode ? "Close assignment form" : "Add assignment"
+            }
+          >
+            {assignmentComposerMode ? (
+              <X className="h-4 w-4" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            <span>{assignmentComposerMode ? "Close" : "Add"}</span>
+          </button>
         </div>
         {assignmentComposerMode && (
           <MobileAssignmentComposer
@@ -2150,6 +2153,7 @@ function MobileCourseDetail({
             onClose={() => setAssignmentComposerMode(null)}
           />
         )}
+        {!assignmentComposerMode && (
         <div className="mt-4 space-y-2">
           {sortedAssignments.map((assignment) => (
             <button
@@ -2192,7 +2196,7 @@ function MobileCourseDetail({
               </p>
               <button
                 type="button"
-                className="mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 text-base font-bold text-white active:scale-[0.98]"
+                className="mobile-glow-action mt-4 inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-4 text-base font-bold active:scale-[0.98]"
                 onClick={() => setAssignmentComposerMode("single")}
               >
                 <Plus className="h-5 w-5" />
@@ -2201,6 +2205,7 @@ function MobileCourseDetail({
             </div>
           )}
         </div>
+        )}
       </section>
 
       <section className="rounded-[2rem] border border-sky-100 bg-gradient-to-br from-slate-950 via-sky-950 to-emerald-900 p-5 text-white shadow-[0_24px_70px_-38px_rgba(14,165,233,0.9)]">
@@ -3362,16 +3367,6 @@ export default function MobileApp() {
                   {activeLabel}
                 </h1>
               </div>
-              {activeTab === "dashboard" && (
-                <button
-                  type="button"
-                  className="grid min-h-11 min-w-11 place-items-center rounded-2xl bg-slate-950 text-white shadow-soft active:scale-[0.98]"
-                  onClick={() => openCourseCreate()}
-                  aria-label="Add course"
-                >
-                  <Plus className="h-5 w-5" />
-                </button>
-              )}
             </div>
           </header>
         )}
