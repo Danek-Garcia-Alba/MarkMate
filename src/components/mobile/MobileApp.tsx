@@ -591,11 +591,13 @@ function MobileBottomSheet({
   title,
   open,
   onClose,
+  action,
   children,
 }: {
   title: string;
   open: boolean;
   onClose: () => void;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const sheetSwipeHandlers = useHorizontalSwipeExit(onClose, open);
@@ -649,14 +651,17 @@ function MobileBottomSheet({
           <h2 className="text-xl font-black tracking-tight text-slate-950">
             {title}
           </h2>
-          <button
-            type="button"
-            className="grid min-h-11 min-w-11 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 active:scale-[0.98]"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {action}
+            <button
+              type="button"
+              className="grid min-h-11 min-w-11 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 active:scale-[0.98]"
+              onClick={onClose}
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
         {children}
       </section>
@@ -1916,8 +1921,31 @@ function MobileCourseCreateSheet({
     }, 500);
   };
 
+  const submitTouchProps = {
+    onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => {
+      if (event.pointerType !== "touch") return;
+      event.preventDefault();
+      event.stopPropagation();
+      submit();
+    },
+    onClick: submit,
+  };
+
   return (
-    <MobileBottomSheet title="New course" open={open} onClose={onClose}>
+    <MobileBottomSheet
+      title="New course"
+      open={open}
+      onClose={onClose}
+      action={
+        <button
+          type="button"
+          className="mobile-glow-action inline-flex min-h-11 items-center justify-center rounded-full px-5 text-sm font-black shadow-[0_16px_34px_-20px_var(--theme-primary)] active:scale-[0.98]"
+          {...submitTouchProps}
+        >
+          Done
+        </button>
+      }
+    >
       <div className="space-y-3 pb-1">
         <div className="rounded-[1.35rem] bg-slate-950 px-4 py-3 text-white">
           <p className="text-sm font-bold leading-relaxed text-white/72">
@@ -1953,13 +1981,7 @@ function MobileCourseCreateSheet({
         <button
           type="button"
           className="mobile-glow-action sticky bottom-[calc(env(safe-area-inset-bottom)+0.35rem)] z-10 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-bold shadow-[0_20px_42px_-22px_var(--theme-primary)] active:scale-[0.98]"
-          onPointerDown={(event) => {
-            if (event.pointerType !== "touch") return;
-            event.preventDefault();
-            event.stopPropagation();
-            submit();
-          }}
-          onClick={submit}
+          {...submitTouchProps}
         >
           <Plus className="h-5 w-5" />
           Add course
