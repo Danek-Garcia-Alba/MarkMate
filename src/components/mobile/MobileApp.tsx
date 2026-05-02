@@ -20,7 +20,9 @@ import {
   Plus,
   Search,
   Settings,
+  Share2,
   Sparkles,
+  Smartphone,
   Target,
   Trash2,
   X,
@@ -241,6 +243,75 @@ function settleMobileInputAfterBlur() {
   window.setTimeout(() => {
     window.scrollTo({ top: window.scrollY, left: 0, behavior: "instant" });
   }, 40);
+}
+
+function isStandalonePwa() {
+  if (typeof window === "undefined") return false;
+  const navigatorWithStandalone = window.navigator as Navigator & {
+    standalone?: boolean;
+  };
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    navigatorWithStandalone.standalone === true
+  );
+}
+
+function isLikelyIOSDevice() {
+  if (typeof navigator === "undefined") return false;
+  return (
+    /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+  );
+}
+
+function useStandalonePwa() {
+  const [standalone, setStandalone] = useState(isStandalonePwa);
+
+  useEffect(() => {
+    const update = () => setStandalone(isStandalonePwa());
+    const media = window.matchMedia("(display-mode: standalone)");
+    update();
+    media.addEventListener?.("change", update);
+    window.addEventListener("focus", update);
+    document.addEventListener("visibilitychange", update);
+    return () => {
+      media.removeEventListener?.("change", update);
+      window.removeEventListener("focus", update);
+      document.removeEventListener("visibilitychange", update);
+    };
+  }, []);
+
+  return standalone;
+}
+
+function useMobileKeyboardOpen() {
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+
+    const update = () => {
+      const active = document.activeElement;
+      const editing =
+        active instanceof HTMLElement &&
+        Boolean(active.closest("input, textarea, select"));
+      setKeyboardOpen(editing && viewport.height < window.innerHeight * 0.82);
+    };
+
+    viewport.addEventListener("resize", update);
+    viewport.addEventListener("scroll", update);
+    window.addEventListener("focusin", update);
+    window.addEventListener("focusout", update);
+    return () => {
+      viewport.removeEventListener("resize", update);
+      viewport.removeEventListener("scroll", update);
+      window.removeEventListener("focusin", update);
+      window.removeEventListener("focusout", update);
+    };
+  }, []);
+
+  return keyboardOpen;
 }
 
 function blurActiveMobileControl() {
@@ -3812,6 +3883,8 @@ function MobileSettings() {
   const setCustomTheme = useCourseStore((state) => state.setCustomTheme);
   const folders = useCourseStore((state) => state.folders);
   const [semesterSheet, setSemesterSheet] = useState<CourseFolder | null | "new">(null);
+  const standalone = useStandalonePwa();
+  const likelyIOS = useMemo(() => isLikelyIOSDevice(), []);
 
   return (
     <div className="space-y-4">
@@ -3842,6 +3915,56 @@ function MobileSettings() {
             );
           })}
         </div>
+      </section>
+
+      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+        <div className="flex items-start gap-3">
+          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-slate-950 text-white">
+            <Smartphone className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+              iPhone app mode
+            </p>
+            <h2 className="mt-1 text-xl font-black tracking-tight">
+              {standalone ? "Installed on this device" : "Add to Home Screen"}
+            </h2>
+            <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-500">
+              {standalone
+                ? "MarkMate is running in standalone mode with the browser chrome tucked away."
+                : likelyIOS
+                ? "Install MarkMate from Safari to open it like an app, without the Safari address bar."
+                : "Install MarkMate from your browser menu for a home-screen app shortcut."}
+            </p>
+          </div>
+        </div>
+        {standalone ? (
+          <div className="mt-4 flex items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700">
+            <CheckCircle2 className="h-5 w-5" />
+            App mode is active
+          </div>
+        ) : (
+          <div className="mt-4 grid gap-2">
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <Share2 className="h-5 w-5 shrink-0 text-slate-400" />
+              <p className="text-sm font-bold text-slate-600">
+                In Safari, tap Share.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <Plus className="h-5 w-5 shrink-0 text-slate-400" />
+              <p className="text-sm font-bold text-slate-600">
+                Choose Add to Home Screen.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <Check className="h-5 w-5 shrink-0 text-slate-400" />
+              <p className="text-sm font-bold text-slate-600">
+                Open MarkMate from the new icon.
+              </p>
+            </div>
+          </div>
+        )}
       </section>
 
       {appMode === "university" ? (
@@ -4024,6 +4147,7 @@ export default function MobileApp() {
     universityThemeId,
     customThemeId
   );
+  const keyboardOpen = useMobileKeyboardOpen();
 
   const showCourseDetail = activeTab === "courses" && selectedCourseId;
   const activeLabel =
@@ -4107,7 +4231,9 @@ export default function MobileApp() {
       }
     >
       <main
-        className="mx-auto min-h-[100dvh] w-full max-w-md px-5 pb-28 pt-[calc(env(safe-area-inset-top)+0.6rem)]"
+        className={`mx-auto min-h-[100dvh] w-full max-w-md px-5 pt-[calc(env(safe-area-inset-top)+0.6rem)] ${
+          keyboardOpen ? "pb-8" : "pb-[calc(env(safe-area-inset-bottom)+7rem)]"
+        }`}
         style={{ touchAction: "pan-y" }}
         {...tabSwipeHandlers}
       >
@@ -4163,9 +4289,9 @@ export default function MobileApp() {
         )}
       </main>
 
-      {!showCourseDetail && (
+      {!showCourseDetail && !keyboardOpen && (
         <nav
-          className="fixed inset-x-0 bottom-0 z-20 border-t border-white/70 bg-white/90 px-3 pb-[calc(env(safe-area-inset-bottom)+0.55rem)] pt-2 shadow-[0_-18px_44px_-28px_rgba(15,23,42,0.45)] backdrop-blur"
+          className="fixed inset-x-0 bottom-0 z-20 border-t border-white/70 bg-white/90 px-3 pb-[calc(env(safe-area-inset-bottom)+0.85rem)] pt-2.5 shadow-[0_-18px_44px_-28px_rgba(15,23,42,0.45)] backdrop-blur"
           style={{ position: "fixed", zIndex: 20 }}
         >
           <div className="mx-auto grid max-w-md grid-cols-5 gap-1">

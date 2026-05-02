@@ -13,11 +13,16 @@
 
 html {
   min-height: 100%;
+  background: #f8fafc;
 }
 
 body {
   min-height: 100%;
   margin: 0;
+  background: #f8fafc;
+  -webkit-tap-highlight-color: transparent;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 @media (max-width: 760px) {
@@ -25,6 +30,12 @@ body {
   body {
     overscroll-behavior-x: none;
     overscroll-behavior-y: none;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
   }
 }
 
@@ -46,6 +57,12 @@ body {
     radial-gradient(circle at 18% 8%, color-mix(in srgb, var(--theme-accent) 13%, transparent), transparent 26rem),
     radial-gradient(circle at 92% 18%, color-mix(in srgb, var(--theme-primary) 11%, transparent), transparent 31rem),
     linear-gradient(135deg, rgb(248 250 252), rgb(241 245 249));
+}
+
+@media (display-mode: standalone) {
+  .app-shell {
+    min-height: 100dvh;
+  }
 }
 
 .app-shell > * {
