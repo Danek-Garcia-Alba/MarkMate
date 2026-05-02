@@ -243,6 +243,12 @@ function settleMobileInputAfterBlur() {
   }, 40);
 }
 
+function blurActiveMobileControl() {
+  if (typeof document === "undefined") return;
+  const active = document.activeElement;
+  if (active instanceof HTMLElement) active.blur();
+}
+
 function isInteractiveSwipeTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   return Boolean(
@@ -250,30 +256,76 @@ function isInteractiveSwipeTarget(target: EventTarget | null) {
   );
 }
 
+function swipeTouchPoint(
+  event: React.TouchEvent<HTMLElement>,
+  source: "touches" | "changedTouches"
+) {
+  const touchList = source === "touches" ? event.touches : event.changedTouches;
+  const touch = touchList.item(0);
+  return touch ? { x: touch.clientX, y: touch.clientY } : null;
+}
+
 function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
-  const startRef = useRef<{ x: number; y: number; active: boolean } | null>(null);
+  const startRef = useRef<{
+    x: number;
+    y: number;
+    active: boolean;
+    swiping: boolean;
+  } | null>(null);
+
+  const completeSwipe = (x: number, y: number) => {
+    const start = startRef.current;
+    startRef.current = null;
+    if (!enabled || !start?.active) return;
+    const dx = x - start.x;
+    const dy = y - start.y;
+    if (Math.abs(dx) > 72 && Math.abs(dx) > Math.abs(dy) * 1.45) {
+      onExit();
+    }
+  };
 
   return {
     onPointerDown: (event: React.PointerEvent<HTMLElement>) => {
+      if (event.pointerType === "touch") return;
       if (!enabled || isInteractiveSwipeTarget(event.target)) return;
       startRef.current = {
         x: event.clientX,
         y: event.clientY,
         active: true,
+        swiping: false,
       };
     },
     onPointerUp: (event: React.PointerEvent<HTMLElement>) => {
-      const start = startRef.current;
-      startRef.current = null;
-      if (!enabled || !start?.active) return;
-      const dx = event.clientX - start.x;
-      const dy = event.clientY - start.y;
-      if (Math.abs(dx) > 72 && Math.abs(dx) > Math.abs(dy) * 1.45) {
-        onExit();
-      }
+      if (event.pointerType === "touch") return;
+      completeSwipe(event.clientX, event.clientY);
     },
     onPointerCancel: () => {
       startRef.current = null;
+    },
+    onTouchStart: (event: React.TouchEvent<HTMLElement>) => {
+      if (!enabled || isInteractiveSwipeTarget(event.target)) return;
+      const point = swipeTouchPoint(event, "touches");
+      if (!point) return;
+      startRef.current = { ...point, active: true, swiping: false };
+    },
+    onTouchMove: (event: React.TouchEvent<HTMLElement>) => {
+      const start = startRef.current;
+      const point = swipeTouchPoint(event, "touches");
+      if (!enabled || !start?.active || !point) return;
+      const dx = point.x - start.x;
+      const dy = point.y - start.y;
+      if (Math.abs(dx) > 18 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+        start.swiping = true;
+        if (event.cancelable) event.preventDefault();
+      }
+    },
+    onTouchEnd: (event: React.TouchEvent<HTMLElement>) => {
+      const point = swipeTouchPoint(event, "changedTouches");
+      if (!point) {
+        startRef.current = null;
+        return;
+      }
+      completeSwipe(point.x, point.y);
     },
   };
 }
@@ -283,32 +335,69 @@ function useHorizontalSwipeNavigation(
   onPrevious: () => void,
   enabled = true
 ) {
-  const startRef = useRef<{ x: number; y: number; active: boolean } | null>(null);
+  const startRef = useRef<{
+    x: number;
+    y: number;
+    active: boolean;
+    swiping: boolean;
+  } | null>(null);
+
+  const completeSwipe = (x: number, y: number) => {
+    const start = startRef.current;
+    startRef.current = null;
+    if (!enabled || !start?.active) return;
+    const dx = x - start.x;
+    const dy = y - start.y;
+    if (Math.abs(dx) <= 72 || Math.abs(dx) <= Math.abs(dy) * 1.45) return;
+    if (dx > 0) {
+      onNext();
+    } else {
+      onPrevious();
+    }
+  };
 
   return {
     onPointerDown: (event: React.PointerEvent<HTMLElement>) => {
+      if (event.pointerType === "touch") return;
       if (!enabled || isInteractiveSwipeTarget(event.target)) return;
       startRef.current = {
         x: event.clientX,
         y: event.clientY,
         active: true,
+        swiping: false,
       };
     },
     onPointerUp: (event: React.PointerEvent<HTMLElement>) => {
-      const start = startRef.current;
-      startRef.current = null;
-      if (!enabled || !start?.active) return;
-      const dx = event.clientX - start.x;
-      const dy = event.clientY - start.y;
-      if (Math.abs(dx) <= 72 || Math.abs(dx) <= Math.abs(dy) * 1.45) return;
-      if (dx > 0) {
-        onNext();
-      } else {
-        onPrevious();
-      }
+      if (event.pointerType === "touch") return;
+      completeSwipe(event.clientX, event.clientY);
     },
     onPointerCancel: () => {
       startRef.current = null;
+    },
+    onTouchStart: (event: React.TouchEvent<HTMLElement>) => {
+      if (!enabled || isInteractiveSwipeTarget(event.target)) return;
+      const point = swipeTouchPoint(event, "touches");
+      if (!point) return;
+      startRef.current = { ...point, active: true, swiping: false };
+    },
+    onTouchMove: (event: React.TouchEvent<HTMLElement>) => {
+      const start = startRef.current;
+      const point = swipeTouchPoint(event, "touches");
+      if (!enabled || !start?.active || !point) return;
+      const dx = point.x - start.x;
+      const dy = point.y - start.y;
+      if (Math.abs(dx) > 18 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+        start.swiping = true;
+        if (event.cancelable) event.preventDefault();
+      }
+    },
+    onTouchEnd: (event: React.TouchEvent<HTMLElement>) => {
+      const point = swipeTouchPoint(event, "changedTouches");
+      if (!point) {
+        startRef.current = null;
+        return;
+      }
+      completeSwipe(point.x, point.y);
     },
   };
 }
@@ -502,6 +591,7 @@ function MobileBottomSheet({
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        style={{ touchAction: "pan-y" }}
         onPointerDown={(event) => {
           event.stopPropagation();
           sheetSwipeHandlers.onPointerDown(event);
@@ -513,6 +603,18 @@ function MobileBottomSheet({
         onPointerCancel={(event) => {
           event.stopPropagation();
           sheetSwipeHandlers.onPointerCancel();
+        }}
+        onTouchStart={(event) => {
+          event.stopPropagation();
+          sheetSwipeHandlers.onTouchStart(event);
+        }}
+        onTouchMove={(event) => {
+          event.stopPropagation();
+          sheetSwipeHandlers.onTouchMove(event);
+        }}
+        onTouchEnd={(event) => {
+          event.stopPropagation();
+          sheetSwipeHandlers.onTouchEnd(event);
         }}
       >
         <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-slate-200" />
@@ -1535,7 +1637,11 @@ function MobileCourses({
         : activeScopeOption.id;
 
     return (
-      <div className="space-y-3" {...semesterSwipeHandlers}>
+      <div
+        className="space-y-3"
+        style={{ touchAction: "pan-y" }}
+        {...semesterSwipeHandlers}
+      >
         <section className="rounded-[1.65rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
           <div className="flex items-center gap-3">
             <button
@@ -1748,6 +1854,9 @@ function MobileCourseCreateSheet({
 }) {
   const folders = useCourseStore((state) => state.folders);
   const addCourse = useCourseStore((state) => state.addCourse);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const folderSelectRef = useRef<HTMLSelectElement>(null);
+  const submitLockRef = useRef(false);
   const [name, setName] = useState("");
   const [folderId, setFolderId] = useState<string | null>(
     initialFolderId ?? folders[0]?.id ?? null
@@ -1755,14 +1864,29 @@ function MobileCourseCreateSheet({
 
   useEffect(() => {
     if (!open) return;
+    submitLockRef.current = false;
     setName("");
     setFolderId(initialFolderId ?? folders[0]?.id ?? null);
   }, [folders, initialFolderId, open]);
 
   const submit = () => {
-    const courseId = addCourse(name.trim() || "New Course", folderId);
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+    blurActiveMobileControl();
+    const liveName = nameInputRef.current?.value ?? name;
+    const liveFolderValue = folderSelectRef.current?.value;
+    const liveFolderId =
+      liveFolderValue === undefined
+        ? folderId
+        : liveFolderValue.trim()
+        ? liveFolderValue
+        : null;
+    const courseId = addCourse(liveName.trim() || "New Course", liveFolderId);
     onClose();
     onCreated(courseId);
+    window.setTimeout(() => {
+      submitLockRef.current = false;
+    }, 500);
   };
 
   return (
@@ -1776,6 +1900,7 @@ function MobileCourseCreateSheet({
         </div>
         <MobileField label="Course name" hint="Examples: CIV312, COG260, APS100, CIV100">
           <input
+            ref={nameInputRef}
             className="min-h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -1786,6 +1911,7 @@ function MobileCourseCreateSheet({
         </MobileField>
         <MobileField label="Semester">
           <select
+            ref={folderSelectRef}
             className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
             value={folderId ?? ""}
             onChange={(event) => setFolderId(event.target.value || null)}
@@ -1801,6 +1927,12 @@ function MobileCourseCreateSheet({
         <button
           type="button"
           className="mobile-glow-action inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-bold active:scale-[0.98]"
+          onPointerDown={(event) => {
+            if (event.pointerType !== "touch") return;
+            event.preventDefault();
+            event.stopPropagation();
+            submit();
+          }}
           onClick={submit}
         >
           <Plus className="h-5 w-5" />
@@ -2548,7 +2680,11 @@ function MobileCourseDetail({
   )}`;
 
   return (
-    <div className="min-h-[100dvh] space-y-3" {...courseSwipeHandlers}>
+    <div
+      className="min-h-[100dvh] space-y-3"
+      style={{ touchAction: "pan-y" }}
+      {...courseSwipeHandlers}
+    >
       <header className="sticky top-[calc(env(safe-area-inset-top)+0.5rem)] z-10 -mx-1 rounded-[1.65rem] border border-white/70 bg-white/92 p-2.5 shadow-soft backdrop-blur">
         <div className="flex items-center gap-3">
           <button
@@ -3928,6 +4064,7 @@ export default function MobileApp() {
     >
       <main
         className="mx-auto min-h-[100dvh] w-full max-w-md px-5 pb-28 pt-[calc(env(safe-area-inset-top)+0.6rem)]"
+        style={{ touchAction: "pan-y" }}
         {...tabSwipeHandlers}
       >
         {!showCourseDetail && (
