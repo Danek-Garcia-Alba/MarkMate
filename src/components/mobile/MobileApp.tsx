@@ -130,6 +130,88 @@ const semesterColors = [
   "#52525b",
 ] as const;
 
+const MOBILE_MODE_SNAPSHOT_KEY = "markmate-mobile-mode-snapshots-v1";
+
+type MobileModeSnapshot = {
+  courses: Course[];
+  folders: CourseFolder[];
+};
+
+function readMobileModeSnapshots(): Partial<
+  Record<"custom" | "university", MobileModeSnapshot>
+> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(MOBILE_MODE_SNAPSHOT_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeMobileModeSnapshots(
+  snapshots: Partial<Record<"custom" | "university", MobileModeSnapshot>>
+) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(MOBILE_MODE_SNAPSHOT_KEY, JSON.stringify(snapshots));
+  } catch {
+    // Ignore storage failures so mode switching still works.
+  }
+}
+
+function switchMobileAppMode(nextMode: "custom" | "university") {
+  const state = useCourseStore.getState();
+  const currentMode = state.appMode ?? "custom";
+  const snapshots = readMobileModeSnapshots();
+
+  snapshots[currentMode] = {
+    courses: state.courses,
+    folders: state.folders,
+  };
+  writeMobileModeSnapshots(snapshots);
+
+  if (nextMode === currentMode) return;
+
+  const saved = snapshots[nextMode];
+  if (nextMode === "custom") {
+    useCourseStore.setState({
+      appMode: "custom",
+      courses: saved?.courses ?? [],
+      folders: saved?.folders ?? [],
+    });
+    return;
+  }
+
+  useCourseStore.setState({
+    appMode: "custom",
+    courses: saved?.courses ?? [],
+    folders: saved?.folders ?? [],
+  });
+  useCourseStore.getState().setAppMode("university");
+}
+
+function nextCustomYearName(folders: CourseFolder[]) {
+  const used = new Set(folders.map((folder) => folder.year).filter(Boolean));
+  for (let index = 1; index < 20; index += 1) {
+    const label = `Year ${index}`;
+    if (!used.has(label)) return label;
+  }
+  return `Year ${used.size + 1}`;
+}
+
+function groupFoldersByYear(folders: CourseFolder[]) {
+  const grouped = new Map<string, CourseFolder[]>();
+  folders.slice().sort(folderSort).forEach((folder) => {
+    const year = folder.year?.trim() || "Unfiled";
+    grouped.set(year, [...(grouped.get(year) ?? []), folder]);
+  });
+  return Array.from(grouped.entries()).map(([year, items]) => ({
+    year,
+    folders: items,
+  }));
+}
+
 function campusBubblePosition(themeId: string) {
   if (themeId === "uoft") return "78% 44%";
   return "76% center";
@@ -1149,7 +1231,7 @@ function MobileGpaHero({
     appMode === "university" ? report.policy.shortName : "MarkMate";
 
   return (
-    <section className="relative overflow-hidden rounded-[2rem] border border-white/70 bg-slate-950 p-5 text-white shadow-[0_24px_64px_-34px_rgba(15,23,42,0.75)]">
+    <section className="relative overflow-hidden rounded-[1.65rem] border border-white/70 bg-slate-950 p-3.5 text-white shadow-[0_24px_64px_-34px_rgba(15,23,42,0.75)]">
       <div
         className="absolute inset-0 opacity-95"
         style={{
@@ -1159,15 +1241,15 @@ function MobileGpaHero({
       />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.26),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.12),transparent)]" />
       <div className="relative">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-white/70">
+            <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-white/70">
               GPA estimate
             </p>
-            <div className="mt-3 text-[3.45rem] font-black leading-none tracking-tight">
+            <div className="mt-2 text-[2.7rem] font-black leading-none tracking-tight">
               {formatSchoolAverage(report)}
             </div>
-            <p className="mt-3 text-sm font-black uppercase tracking-[0.18em] text-white/75">
+            <p className="mt-2 text-xs font-black uppercase tracking-[0.18em] text-white/75">
               {primaryLabel}
             </p>
           </div>
@@ -1180,20 +1262,20 @@ function MobileGpaHero({
             <CircleHelp className="h-5 w-5" />
           </button>
         </div>
-        <div className="mt-6 grid grid-cols-2 gap-3">
-          <div className="rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur">
-            <p className="text-xs font-bold uppercase tracking-wide text-white/60">
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-2xl border border-white/20 bg-white/10 px-3 py-2 backdrop-blur">
+            <p className="text-[0.65rem] font-bold uppercase tracking-wide text-white/60">
               Included
             </p>
-            <p className="mt-1 text-2xl font-black tabular-nums">
+            <p className="mt-0.5 text-xl font-black tabular-nums">
               {completeCourses}
             </p>
           </div>
-          <div className="rounded-2xl border border-white/20 bg-white/10 p-3 backdrop-blur">
-            <p className="text-xs font-bold uppercase tracking-wide text-white/60">
+          <div className="rounded-2xl border border-white/20 bg-white/10 px-3 py-2 backdrop-blur">
+            <p className="text-[0.65rem] font-bold uppercase tracking-wide text-white/60">
               Waiting
             </p>
-            <p className="mt-1 text-2xl font-black tabular-nums">
+            <p className="mt-0.5 text-xl font-black tabular-nums">
               {waitingCount}
             </p>
           </div>
@@ -1227,13 +1309,11 @@ function EmptyCourses({ onAddCourse }: { onAddCourse: () => void }) {
 
 function EmptyCustomStructure({
   onAddYear,
-  onQuickCourse,
 }: {
   onAddYear: () => void;
-  onQuickCourse: () => void;
 }) {
   return (
-    <section className="rounded-[2rem] border border-white/70 bg-white/95 p-5 shadow-soft backdrop-blur">
+    <section className="rounded-[1.6rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
       <div className="flex items-start gap-4">
         <MarkMateLogo size="md" className="shrink-0" />
         <div className="min-w-0 flex-1">
@@ -1248,23 +1328,14 @@ function EmptyCustomStructure({
           </p>
         </div>
       </div>
-      <div className="mt-5 grid grid-cols-[1.15fr_0.85fr] gap-2">
-        <button
-          type="button"
-          className="mobile-glow-action inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-4 text-base font-black active:scale-[0.98]"
-          onClick={onAddYear}
-        >
-          <Plus className="h-5 w-5" />
-          New year
-        </button>
-        <button
-          type="button"
-          className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-base font-black text-slate-700 active:scale-[0.98]"
-          onClick={onQuickCourse}
-        >
-          Quick course
-        </button>
-      </div>
+      <button
+        type="button"
+        className="mobile-glow-action mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-black active:scale-[0.98]"
+        onClick={onAddYear}
+      >
+        <Plus className="h-5 w-5" />
+        Create first year
+      </button>
     </section>
   );
 }
@@ -1277,7 +1348,6 @@ function MobileIdentityCard({
   semesterCount: number;
 }) {
   const appMode = useCourseStore((state) => state.appMode ?? "custom");
-  const setAppMode = useCourseStore((state) => state.setAppMode);
   const universityThemeId = useCourseStore(
     (state) => state.universityThemeId ?? "uoft"
   );
@@ -1339,7 +1409,9 @@ function MobileIdentityCard({
                     className={`min-h-9 rounded-xl text-xs font-black active:scale-[0.98] ${
                       active ? "bg-white text-slate-950" : "text-white/70"
                     }`}
-                    onClick={() => setAppMode(option.id as "custom" | "university")}
+                    onClick={() =>
+                      switchMobileAppMode(option.id as "custom" | "university")
+                    }
                   >
                     {option.label}
                   </button>
@@ -1369,6 +1441,8 @@ function MobileIdentityCard({
 function MobileHomeCommandPanel({
   report,
   nextAssignment,
+  recentCourses,
+  folders,
   onAddCourse,
   onGoCourses,
   onGoCalendar,
@@ -1378,6 +1452,8 @@ function MobileHomeCommandPanel({
 }: {
   report: UniversityGpaReport;
   nextAssignment?: { course: Course; assignment: Assignment };
+  recentCourses: Course[];
+  folders: CourseFolder[];
   onAddCourse: () => void;
   onGoCourses: () => void;
   onGoCalendar: () => void;
@@ -1389,15 +1465,98 @@ function MobileHomeCommandPanel({
   const primaryLabel =
     appMode === "university" ? report.policy.shortName : "MarkMate";
   const needsCustomSetup = appMode === "custom" && folderCount === 0;
+  const [widgetIndex, setWidgetIndex] = useState(0);
+  const recentCourse = recentCourses[0];
+  const recentMetrics = recentCourse ? calcMetrics(recentCourse) : null;
+  const widgets = useMemo(() => {
+    const nextWidget = {
+      key: "next",
+      label: nextAssignment ? "Next up" : "Start here",
+      title:
+        nextAssignment?.assignment.title ||
+        (needsCustomSetup ? "Create a year" : "Add a course"),
+      detail: nextAssignment
+        ? `${nextAssignment.course.name} / ${formatShortDate(
+            nextAssignment.assignment.dueDate
+          )}`
+        : needsCustomSetup
+        ? "Build your own year and semester setup."
+        : "Name the class, then add assignments inside it.",
+      icon: CalendarDays,
+      onClick: () =>
+        nextAssignment
+          ? onOpenCourse(nextAssignment.course.id)
+          : needsCustomSetup
+          ? onGoCourses()
+          : onAddCourse(),
+    };
+    const recentWidget = recentCourse
+      ? {
+          key: "recent",
+          label: "Recent class",
+          title: recentCourse.name,
+          detail: `${folderLabel(recentCourse, folders)} / ${formatPercent(
+            recentMetrics?.gradeSoFar ?? 0
+          )}`,
+          icon: BookOpen,
+          onClick: () => onOpenCourse(recentCourse.id),
+        }
+      : null;
+    const gpaWidget = {
+      key: "gpa",
+      label: "GPA status",
+      title: formatSchoolAverage(report),
+      detail: `${report.cumulative.includedCourses.length} included / ${gpaWaitingCourseCount(
+        report
+      )} waiting`,
+      icon: Gauge,
+      onClick: onOpenGpa,
+    };
+
+    return (
+      nextAssignment || needsCustomSetup
+        ? [nextWidget, recentWidget, gpaWidget]
+        : [recentWidget, gpaWidget, nextWidget]
+    ).filter(Boolean) as Array<{
+        key: string;
+        label: string;
+        title: string;
+        detail: string;
+        icon: typeof CalendarDays;
+        onClick: () => void;
+      }>;
+  }, [
+    folders,
+    needsCustomSetup,
+    nextAssignment,
+    onAddCourse,
+    onGoCourses,
+    onOpenCourse,
+    onOpenGpa,
+    recentCourse,
+    recentMetrics?.gradeSoFar,
+    report,
+  ]);
+
+  useEffect(() => {
+    if (widgets.length <= 1) return;
+    const id = window.setInterval(() => {
+      setWidgetIndex((current) => (current + 1) % widgets.length);
+    }, 5200);
+    return () => window.clearInterval(id);
+  }, [widgets.length]);
+
+  const activeWidget = widgets[widgetIndex % widgets.length] ?? widgets[0];
+  const ActiveIcon = activeWidget?.icon ?? CalendarDays;
 
   return (
-    <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+    <section className="rounded-[1.75rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-wide text-slate-500">
             Today
           </p>
-          <div className="mt-1 text-4xl font-black tracking-tight text-slate-950">
+          <div className="mt-0.5 text-3xl font-black tracking-tight text-slate-950">
             {formatSchoolAverage(report)}
           </div>
           <p className="mt-1 text-sm font-black uppercase tracking-[0.16em] text-slate-400">
@@ -1414,40 +1573,48 @@ function MobileHomeCommandPanel({
         </button>
       </div>
 
-      <button
-        type="button"
-        className="mt-4 flex min-h-[76px] w-full items-center gap-3 rounded-2xl bg-slate-950 px-4 py-3 text-left text-white active:scale-[0.99]"
-        onClick={() =>
-          nextAssignment
-            ? onOpenCourse(nextAssignment.course.id)
-            : needsCustomSetup
-            ? onGoCourses()
-            : onAddCourse()
-        }
-      >
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/12">
-          <CalendarDays className="h-5 w-5 text-white/70" />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-xs font-black uppercase tracking-wide text-white/50">
-            {nextAssignment ? "Next up" : "Start here"}
-          </span>
-          <span className="mt-0.5 block truncate text-xl font-black">
-            {nextAssignment?.assignment.title ||
-              (needsCustomSetup ? "Create a year" : "Add a course")}
-          </span>
-          <span className="mt-0.5 block truncate text-sm font-semibold text-white/58">
-            {nextAssignment
-              ? `${nextAssignment.course.name} / ${formatShortDate(
-                  nextAssignment.assignment.dueDate
-                )}`
-              : needsCustomSetup
-              ? "Set up any year and semester first."
-              : "Name it once, then add assignments inside it."}
-          </span>
-        </span>
-        <ChevronRight className="h-5 w-5 shrink-0 text-white/50" />
-      </button>
+      {activeWidget && (
+        <div className="mt-3 rounded-[1.35rem] border border-slate-950/10 bg-slate-950 p-2 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]">
+          <button
+            type="button"
+            className="flex min-h-[66px] w-full items-center gap-3 rounded-[1.05rem] bg-white/8 px-3 py-2 text-left active:scale-[0.99]"
+            onClick={activeWidget.onClick}
+          >
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/12">
+              <ActiveIcon className="h-5 w-5 text-white/74" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[0.68rem] font-black uppercase tracking-wide text-white/48">
+                {activeWidget.label}
+              </span>
+              <span className="mt-0.5 block truncate text-lg font-black">
+                {activeWidget.title}
+              </span>
+              <span className="mt-0.5 block truncate text-xs font-semibold text-white/58">
+                {activeWidget.detail}
+              </span>
+            </span>
+            <ChevronRight className="h-5 w-5 shrink-0 text-white/50" />
+          </button>
+          {widgets.length > 1 && (
+            <div className="mt-2 flex justify-center gap-1.5">
+              {widgets.map((widget, index) => (
+                <button
+                  key={widget.key}
+                  type="button"
+                  className={`h-1.5 rounded-full transition-all ${
+                    index === widgetIndex % widgets.length
+                      ? "w-5 bg-white"
+                      : "w-1.5 bg-white/28"
+                  }`}
+                  onClick={() => setWidgetIndex(index)}
+                  aria-label={`Show ${widget.label}`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button
@@ -1521,6 +1688,8 @@ function MobileDashboard({
       <MobileHomeCommandPanel
         report={report}
         nextAssignment={nextAssignment}
+        recentCourses={activeCourses}
+        folders={folders}
         onAddCourse={onAddCourse}
         onGoCourses={onGoCourses}
         onGoCalendar={onGoCalendar}
@@ -1529,55 +1698,6 @@ function MobileDashboard({
         folderCount={folders.length}
       />
 
-      {courses.length > 0 && (
-        <>
-          <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
-            <div className="mb-3 flex items-center justify-between gap-4">
-              <div>
-                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-                  Courses
-                </p>
-                <h2 className="text-xl font-black tracking-tight">
-                  Recent classes
-                </h2>
-              </div>
-              <button
-                type="button"
-                className="grid min-h-11 min-w-11 place-items-center rounded-full bg-slate-950 text-white active:scale-[0.98]"
-                onClick={onGoCourses}
-                aria-label="Open courses"
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="divide-y divide-slate-100">
-              {activeCourses.map((course) => {
-                const metrics = calcMetrics(course);
-                return (
-                  <button
-                    key={course.id}
-                    type="button"
-                    className="flex min-h-[68px] w-full items-center justify-between gap-4 py-3 text-left active:scale-[0.99]"
-                    onClick={() => onOpenCourse(course.id)}
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-base font-black text-slate-950">
-                        {course.name}
-                      </p>
-                      <p className="mt-0.5 text-sm font-semibold text-slate-500">
-                        {folderLabel(course, folders)}
-                      </p>
-                    </div>
-                    <p className="text-lg font-black tabular-nums text-slate-950">
-                      {formatPercent(metrics.gradeSoFar)}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        </>
-      )}
     </div>
   );
 }
@@ -1673,10 +1793,13 @@ function MobileCourses({
   const folders = useCourseStore((state) => state.folders);
   const appMode = useCourseStore((state) => state.appMode ?? "custom");
   const [query, setQuery] = useState("");
+  const [activeYear, setActiveYear] = useState<string | null>(null);
   const [activeScope, setActiveScope] = useState<string | null>(null);
-  const [semesterSheet, setSemesterSheet] = useState<CourseFolder | null | "new">(
-    null
-  );
+  const [semesterSheet, setSemesterSheet] = useState<CourseFolder | null>(null);
+  const [createSemesterSheet, setCreateSemesterSheet] = useState<{
+    mode: "year" | "semester";
+    year?: string;
+  } | null>(null);
   const isCustomMode = appMode === "custom";
   const foldersById = useMemo(
     () =>
@@ -1686,6 +1809,10 @@ function MobileCourses({
     [folders]
   );
   const sortedFolders = useMemo(() => folders.slice().sort(folderSort), [folders]);
+  const customYearGroups = useMemo(
+    () => groupFoldersByYear(sortedFolders),
+    [sortedFolders]
+  );
   const folderOptions = useMemo(
     () => [
       { id: "all", label: "All classes", folder: null as CourseFolder | null },
@@ -1817,23 +1944,121 @@ function MobileCourses({
     );
   }
 
+  if (isCustomMode && activeYear) {
+    const yearGroup = customYearGroups.find((group) => group.year === activeYear);
+    const yearFolders = yearGroup?.folders ?? [];
+    const yearCourseCount = yearFolders.reduce(
+      (sum, folder) => sum + coursesForScope(folder.id).length,
+      0
+    );
+
+    return (
+      <div className="space-y-2.5">
+        <section className="rounded-[1.5rem] border border-white/70 bg-white/95 p-2.5 shadow-soft backdrop-blur">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="grid min-h-10 min-w-10 place-items-center rounded-2xl bg-slate-950 text-white active:scale-[0.98]"
+              onClick={() => setActiveYear(null)}
+              aria-label="Back to years"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div className="min-w-0 flex-1">
+              <p className="text-[0.68rem] font-black uppercase tracking-wide text-slate-500">
+                Year
+              </p>
+              <h1 className="mt-0.5 truncate text-lg font-black tracking-tight">
+                {activeYear}
+              </h1>
+            </div>
+            <button
+              type="button"
+              className="mobile-glow-action grid min-h-10 min-w-10 place-items-center rounded-2xl active:scale-[0.98]"
+              onClick={() =>
+                setCreateSemesterSheet({ mode: "semester", year: activeYear })
+              }
+              aria-label="Add semester"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          </div>
+          <p className="mt-2 rounded-2xl bg-slate-50 px-3 py-2 text-xs font-black text-slate-500">
+            {yearFolders.length} semesters / {yearCourseCount} courses
+          </p>
+        </section>
+
+        <section className="rounded-[1.5rem] border border-white/70 bg-white/95 p-2.5 shadow-soft backdrop-blur">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p className="text-[0.68rem] font-black uppercase tracking-wide text-slate-500">
+                Semesters
+              </p>
+              <h2 className="mt-0.5 text-base font-black tracking-tight">
+                Pick one
+              </h2>
+            </div>
+            <p className="text-xs font-black text-slate-400">
+              {yearCourseCount} total
+            </p>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-1.5">
+            {yearFolders.map((folder) => {
+              const scopedCourses = coursesForScope(folder.id);
+              return (
+                <button
+                  key={folder.id}
+                  type="button"
+                  className="min-h-[52px] rounded-[1rem] border border-slate-200 bg-white px-2.5 py-2 text-left active:scale-[0.99]"
+                  onClick={() => setActiveScope(folder.id)}
+                >
+                  <span
+                    className="mb-1 block h-1.5 w-8 rounded-full"
+                    style={{ backgroundColor: folder.color }}
+                  />
+                  <span className="block truncate text-sm font-black leading-tight text-slate-950">
+                    {folder.name}
+                  </span>
+                  <span className="mt-0.5 block text-[0.68rem] font-black text-slate-400">
+                    {scopedCourses.length} courses
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <MobileSemesterSheet
+          open={semesterSheet != null || createSemesterSheet != null}
+          onClose={() => {
+            setSemesterSheet(null);
+            setCreateSemesterSheet(null);
+          }}
+          folder={semesterSheet}
+          createMode={createSemesterSheet?.mode}
+          initialYear={createSemesterSheet?.year}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-3">
-      <section className="rounded-[1.65rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
+    <div className="space-y-2.5">
+      <section className="rounded-[1.5rem] border border-white/70 bg-white/95 p-2.5 shadow-soft backdrop-blur">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+            <p className="text-[0.68rem] font-black uppercase tracking-wide text-slate-500">
               Courses
             </p>
-            <h1 className="mt-0.5 text-xl font-black tracking-tight">
+            <h1 className="mt-0.5 text-lg font-black tracking-tight">
               Your classes
             </h1>
           </div>
         </div>
-        <label className="relative mt-3 block">
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+        <label className="relative mt-2 block">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
-            className="min-h-11 w-full rounded-2xl border border-slate-200 bg-white pl-12 pr-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+            className="min-h-10 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-3 text-sm font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search CIV312, COG260, APS100"
@@ -1844,15 +2069,15 @@ function MobileCourses({
         {!query.trim() && courses.length > 0 && (
           <button
             type="button"
-            className="mobile-glow-action mt-2 flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-left active:scale-[0.99]"
+            className="mobile-glow-action mt-2 flex min-h-10 w-full items-center gap-3 rounded-2xl px-3 text-left active:scale-[0.99]"
             onClick={() => onAddCourse()}
           >
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/12">
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-xl bg-white/12">
               <Plus className="h-4 w-4" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-black">New course</span>
-              <span className="mt-0.5 block text-xs font-semibold text-white/58">
+              <span className="block text-xs font-black">New course</span>
+              <span className="mt-0.5 block text-[0.68rem] font-semibold text-white/58">
                 Choose semester next.
               </span>
             </span>
@@ -1860,15 +2085,12 @@ function MobileCourses({
         )}
       </section>
 
-      {courses.length === 0 && folders.length === 0 ? (
-        isCustomMode ? (
-          <EmptyCustomStructure
-            onAddYear={() => setSemesterSheet("new")}
-            onQuickCourse={() => onAddCourse(null)}
-          />
-        ) : (
-          <EmptyCourses onAddCourse={() => onAddCourse()} />
-        )
+      {isCustomMode && folders.length === 0 && !query.trim() ? (
+        <EmptyCustomStructure
+          onAddYear={() => setCreateSemesterSheet({ mode: "year" })}
+        />
+      ) : courses.length === 0 && folders.length === 0 ? (
+        <EmptyCourses onAddCourse={() => onAddCourse()} />
       ) : query.trim() ? (
         <section className="rounded-[1.65rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
           <p className="text-xs font-black uppercase tracking-wide text-slate-500">
@@ -1890,22 +2112,73 @@ function MobileCourses({
             )}
           </div>
         </section>
+      ) : isCustomMode ? (
+        <section className="rounded-[1.5rem] border border-white/70 bg-white/95 p-2.5 shadow-soft backdrop-blur">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[0.68rem] font-black uppercase tracking-wide text-slate-500">
+                Years
+              </p>
+              <h2 className="mt-0.5 text-base font-black tracking-tight">
+                Your setup
+              </h2>
+            </div>
+            <button
+              type="button"
+              className="mobile-glow-action grid min-h-10 min-w-10 place-items-center rounded-2xl active:scale-[0.98]"
+              onClick={() => setCreateSemesterSheet({ mode: "year" })}
+              aria-label="Add year"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-1.5">
+            {customYearGroups.map((group) => {
+              const yearCourseCount = group.folders.reduce(
+                (sum, folder) => sum + coursesForScope(folder.id).length,
+                0
+              );
+              return (
+                <button
+                  key={group.year}
+                  type="button"
+                  className="min-h-[58px] rounded-[1rem] border border-slate-200 bg-white px-2.5 py-2 text-left active:scale-[0.99]"
+                  onClick={() => setActiveYear(group.year)}
+                >
+                  <span
+                    className="mb-1 block h-1.5 w-9 rounded-full"
+                    style={{
+                      backgroundColor:
+                        group.folders[0]?.color ?? "var(--theme-primary)",
+                    }}
+                  />
+                  <span className="block truncate text-sm font-black leading-tight text-slate-950">
+                    {group.year}
+                  </span>
+                  <span className="mt-0.5 block text-[0.68rem] font-black text-slate-400">
+                    {group.folders.length} semesters / {yearCourseCount} courses
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
       ) : (
-        <section className="rounded-[1.65rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
+        <section className="rounded-[1.5rem] border border-white/70 bg-white/95 p-2.5 shadow-soft backdrop-blur">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+              <p className="text-[0.68rem] font-black uppercase tracking-wide text-slate-500">
                 Semesters
               </p>
-              <h2 className="mt-0.5 text-lg font-black tracking-tight">
+              <h2 className="mt-0.5 text-base font-black tracking-tight">
                 Pick one
               </h2>
             </div>
-            <p className="text-sm font-black text-slate-400">
+            <p className="text-xs font-black text-slate-400">
               {courses.length} total
             </p>
           </div>
-          <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="mt-2 grid grid-cols-3 gap-1.5">
           {folderOptions.map((option) => {
             const scopedCourses = coursesForScope(option.id);
             const color = option.folder?.color ?? "var(--theme-primary)";
@@ -1916,17 +2189,17 @@ function MobileCourses({
               <button
                 key={option.id}
                 type="button"
-                className="min-h-[50px] rounded-[1.05rem] border border-slate-200 bg-white px-2.5 py-2 text-left shadow-[0_14px_30px_-30px_rgba(15,23,42,0.45)] active:scale-[0.99]"
+                className="min-h-[43px] rounded-[0.95rem] border border-slate-200 bg-white px-2 py-1.5 text-left shadow-[0_14px_30px_-30px_rgba(15,23,42,0.45)] active:scale-[0.99]"
                 onClick={() => setActiveScope(option.id)}
               >
                 <span
-                  className="mb-1.5 block h-1.5 w-8 rounded-full"
+                  className="mb-1 block h-1.5 w-7 rounded-full"
                   style={{ backgroundColor: color }}
                 />
-                <span className="block truncate text-[0.82rem] font-black leading-tight text-slate-950">
+                <span className="block truncate text-[0.72rem] font-black leading-tight text-slate-950">
                   {option.label}
                 </span>
-                <span className="mt-0.5 block text-[0.68rem] font-black text-slate-400">
+                <span className="mt-0.5 block text-[0.62rem] font-black text-slate-400">
                   {scopedCourses.length}
                 </span>
               </button>
@@ -1936,9 +2209,14 @@ function MobileCourses({
         </section>
       )}
       <MobileSemesterSheet
-        open={semesterSheet != null}
-        onClose={() => setSemesterSheet(null)}
-        folder={semesterSheet === "new" ? null : semesterSheet}
+        open={semesterSheet != null || createSemesterSheet != null}
+        onClose={() => {
+          setSemesterSheet(null);
+          setCreateSemesterSheet(null);
+        }}
+        folder={semesterSheet}
+        createMode={createSemesterSheet?.mode}
+        initialYear={createSemesterSheet?.year}
       />
     </div>
   );
@@ -3169,35 +3447,31 @@ function MobileCalendar({
     });
   }, [activeMonth]);
   const selectedItems = itemsByDate.get(selectedDate) ?? [];
-  const upcomingItems = items
-    .filter((item) => (item.assignment.dueDate ?? "") >= todayIso())
-    .slice(0, 6);
-
   return (
-    <div className="space-y-3">
-      <section className="rounded-[1.65rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
+    <div className="space-y-0">
+      <section className="rounded-[1.45rem] border border-white/70 bg-white/95 p-2.5 shadow-soft backdrop-blur">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+            <p className="text-[0.68rem] font-black uppercase tracking-wide text-slate-500">
               Calendar
             </p>
-            <h1 className="mt-0.5 text-xl font-black tracking-tight">
+            <h1 className="mt-0.5 text-lg font-black tracking-tight">
               Deadlines
             </h1>
           </div>
           <button
             type="button"
-            className="grid min-h-11 min-w-11 place-items-center rounded-2xl bg-slate-950 text-white shadow-soft active:scale-[0.98]"
+            className="grid min-h-10 min-w-10 place-items-center rounded-2xl bg-slate-950 text-white shadow-soft active:scale-[0.98]"
             onClick={() => setQuickOpen(true)}
             aria-label="Add deadline"
           >
             <Plus className="h-5 w-5" />
           </button>
         </div>
-        <div className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-slate-100 p-1">
+        <div className="mt-2 flex items-center justify-between gap-2 rounded-2xl bg-slate-100 p-1">
           <button
             type="button"
-            className="grid min-h-10 min-w-10 place-items-center rounded-xl bg-white text-slate-700 shadow-soft active:scale-[0.98]"
+            className="grid min-h-9 min-w-9 place-items-center rounded-xl bg-white text-slate-700 shadow-soft active:scale-[0.98]"
             onClick={() =>
               setActiveMonth(
                 new Date(activeMonth.getFullYear(), activeMonth.getMonth() - 1, 1)
@@ -3207,12 +3481,12 @@ function MobileCalendar({
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <p className="text-base font-black text-slate-950">
+          <p className="text-sm font-black text-slate-950">
             {monthTitle(activeMonth)}
           </p>
           <button
             type="button"
-            className="grid min-h-10 min-w-10 place-items-center rounded-xl bg-white text-slate-700 shadow-soft active:scale-[0.98]"
+            className="grid min-h-9 min-w-9 place-items-center rounded-xl bg-white text-slate-700 shadow-soft active:scale-[0.98]"
             onClick={() =>
               setActiveMonth(
                 new Date(activeMonth.getFullYear(), activeMonth.getMonth() + 1, 1)
@@ -3224,14 +3498,14 @@ function MobileCalendar({
           </button>
         </div>
         {calendarScopes.length > 2 && (
-          <div className="-mx-0.5 mt-2 flex gap-1.5 overflow-x-auto px-0.5 pb-1">
+          <div className="-mx-0.5 mt-1.5 flex gap-1.5 overflow-x-auto px-0.5 pb-1">
             {calendarScopes.map((scope) => {
               const active = filter === scope.id;
               return (
                 <button
                   key={scope.id}
                   type="button"
-                  className={`min-h-9 shrink-0 rounded-2xl px-3 text-xs font-black ${
+                  className={`min-h-8 max-w-[7rem] shrink-0 truncate rounded-2xl px-2.5 text-[0.7rem] font-black ${
                     active
                       ? "bg-slate-950 text-white"
                       : "border border-slate-200 bg-white text-slate-600"
@@ -3244,7 +3518,7 @@ function MobileCalendar({
             })}
           </div>
         )}
-        <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[0.68rem] font-black uppercase tracking-wide text-slate-400">
+        <div className="mt-2 grid grid-cols-7 gap-1 text-center text-[0.64rem] font-black uppercase tracking-wide text-slate-400">
           {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
             <div key={`${day}-${index}`} className="py-0.5">
               {day}
@@ -3262,7 +3536,7 @@ function MobileCalendar({
               <button
                 key={iso}
                 type="button"
-                className={`relative grid aspect-square min-h-0 place-items-center rounded-xl text-sm font-black transition active:scale-[0.96] ${
+                className={`relative grid h-8 min-h-0 place-items-center rounded-xl text-xs font-black transition active:scale-[0.96] ${
                   isSelected
                     ? "bg-slate-950 text-white"
                     : isToday
@@ -3284,13 +3558,13 @@ function MobileCalendar({
           })}
         </div>
 
-        <div className="mt-3 rounded-[1.35rem] bg-slate-950 p-3 text-white">
+        <div className="mt-2 rounded-[1.2rem] bg-slate-950 p-2.5 text-white">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-wide text-white/45">
+              <p className="text-[0.65rem] font-black uppercase tracking-wide text-white/45">
                 Agenda
               </p>
-              <h2 className="mt-0.5 truncate text-base font-black">
+              <h2 className="mt-0.5 truncate text-sm font-black">
                 {formatLongDate(selectedDate)}
               </h2>
             </div>
@@ -3319,43 +3593,13 @@ function MobileCalendar({
             {selectedItems.length === 0 && (
               <button
                 type="button"
-                className="min-h-12 w-full rounded-2xl border border-white/12 bg-white/8 px-3 text-left text-sm font-black text-white/72 active:scale-[0.99]"
+                className="min-h-10 w-full rounded-2xl border border-white/12 bg-white/8 px-3 text-left text-xs font-black text-white/72 active:scale-[0.99]"
                 onClick={() => setQuickOpen(true)}
               >
                 No deadlines. Tap to add one.
               </button>
             )}
           </div>
-        </div>
-      </section>
-
-      <section className="rounded-[1.65rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-            Up next
-          </p>
-          <p className="text-sm font-black text-slate-400">
-            {upcomingItems.length}
-          </p>
-        </div>
-        <div className="mt-3 space-y-2">
-          {upcomingItems.map((item) => (
-            <CalendarAssignmentRow
-              key={`${item.course.id}-${item.assignment.id}`}
-              item={item}
-              onOpenCourse={() => onOpenCourse(item.course.id)}
-              onComplete={() =>
-                updateAssignment(item.course.id, item.assignment.id, {
-                  status: "completed",
-                })
-              }
-            />
-          ))}
-          {upcomingItems.length === 0 && (
-            <p className="rounded-3xl border border-dashed border-slate-300 px-5 py-8 text-center text-base font-semibold text-slate-500">
-              Nothing dated yet.
-            </p>
-          )}
         </div>
       </section>
 
@@ -3421,19 +3665,18 @@ function MobileGpa({
   const report = useGpaReport();
   const yearRows = gpaYearRows(report);
   const sessionRows = gpaSessionRows(report);
-  const waitingCount = gpaWaitingCourseCount(report);
   const rows = [...yearRows, ...sessionRows];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2.5">
       <MobileGpaHero report={report} onOpenGpa={onOpenGpa} />
-      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
-        <div className="flex items-center justify-between gap-4">
+      <section className="rounded-[1.65rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
+        <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+            <p className="text-[0.68rem] font-black uppercase tracking-wide text-slate-500">
               Breakdown
             </p>
-            <h1 className="mt-1 text-2xl font-black tracking-tight">
+            <h1 className="mt-0.5 text-xl font-black tracking-tight">
               GPA map
             </h1>
           </div>
@@ -3446,21 +3689,21 @@ function MobileGpa({
             <CircleHelp className="h-5 w-5" />
           </button>
         </div>
-        <div className="mt-4 divide-y divide-slate-100">
+        <div className="mt-3 divide-y divide-slate-100">
           {rows.map((row) => (
             <div
               key={`${row.label}-${"id" in row ? row.id : row.key}`}
-              className="flex min-h-[68px] items-center justify-between gap-4 py-3"
+              className="flex min-h-[52px] items-center justify-between gap-3 py-2"
             >
               <div className="min-w-0">
-                <p className="truncate text-base font-black text-slate-950">
+                <p className="truncate text-sm font-black text-slate-950">
                   {row.label}
                 </p>
-                <p className="mt-1 text-base font-semibold text-slate-500">
+                <p className="mt-0.5 text-xs font-semibold text-slate-500">
                   {averageDetail(row.result)}
                 </p>
               </div>
-              <p className="text-lg font-black tabular-nums text-slate-950">
+              <p className="text-base font-black tabular-nums text-slate-950">
                 {row.result.displayAverage == null
                   ? "--"
                   : formatAverage(row.result)}
@@ -3468,23 +3711,11 @@ function MobileGpa({
             </div>
           ))}
           {rows.length === 0 && (
-            <p className="rounded-3xl border border-dashed border-slate-300 px-5 py-8 text-center text-base text-slate-500">
+            <p className="rounded-2xl border border-dashed border-slate-300 px-4 py-5 text-center text-sm font-semibold text-slate-500">
               Complete a course to unlock year and session breakdowns.
             </p>
           )}
         </div>
-      </section>
-      <section className="grid grid-cols-2 gap-3">
-        <MobileMetric
-          label="Credits"
-          value={formatCredits(report.cumulative.creditsIncluded)}
-          detail="Included now"
-        />
-        <MobileMetric
-          label="Waiting"
-          value={String(waitingCount)}
-          detail="Need final marks"
-        />
       </section>
     </div>
   );
@@ -3619,10 +3850,14 @@ function MobileSemesterSheet({
   open,
   onClose,
   folder,
+  createMode = "semester",
+  initialYear,
 }: {
   open: boolean;
   onClose: () => void;
   folder: CourseFolder | null;
+  createMode?: "year" | "semester";
+  initialYear?: string;
 }) {
   const addFolder = useCourseStore((state) => state.addFolder);
   const renameFolder = useCourseStore((state) => state.renameFolder);
@@ -3636,11 +3871,15 @@ function MobileSemesterSheet({
 
   useEffect(() => {
     if (!open) return;
-    setName(folder?.name ?? "");
-    setYear(folder?.year ?? semesterYears[0]);
+    setName(folder?.name ?? (createMode === "year" ? "Fall" : ""));
+    setYear(
+      folder?.year ??
+        initialYear ??
+        (createMode === "year" ? nextCustomYearName(folders) : semesterYears[0])
+    );
     setColor(folder?.color ?? semesterColors[folders.length % semesterColors.length]);
     setError("");
-  }, [folder, folders.length, open]);
+  }, [createMode, folder, folders, folders.length, initialYear, open]);
 
   const save = () => {
     const trimmed = name.trim();
@@ -3664,13 +3903,30 @@ function MobileSemesterSheet({
 
   return (
     <MobileBottomSheet
-      title={folder ? "Edit semester" : "New year"}
+      title={folder ? "Edit semester" : createMode === "year" ? "New year" : "New semester"}
       open={open}
       onClose={onClose}
     >
       <div className="space-y-4">
         <MobileField
-          label="Semester"
+          label="Year"
+          hint={
+            createMode === "year"
+              ? "Make any container: Year 1, Grade 12, Bootcamp."
+              : "This semester will live inside this year."
+          }
+        >
+          <input
+            className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+            value={year}
+            onChange={(event) => setYear(event.target.value)}
+            placeholder="Year 1"
+            onKeyDown={blurMobileInputOnEnter}
+            onBlur={settleMobileInputAfterBlur}
+          />
+        </MobileField>
+        <MobileField
+          label={createMode === "year" ? "First semester" : "Semester"}
           hint="Use any name: Fall, Block 1, Term A, Summer."
         >
           <input
@@ -3678,19 +3934,6 @@ function MobileSemesterSheet({
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Fall"
-            onKeyDown={blurMobileInputOnEnter}
-            onBlur={settleMobileInputAfterBlur}
-          />
-        </MobileField>
-        <MobileField
-          label="Year"
-          hint="Custom mode can be anything: Year 1, Grade 12, Bootcamp."
-        >
-          <input
-            className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
-            value={year}
-            onChange={(event) => setYear(event.target.value)}
-            placeholder="Year 1"
             onKeyDown={blurMobileInputOnEnter}
             onBlur={settleMobileInputAfterBlur}
           />
@@ -3722,7 +3965,7 @@ function MobileSemesterSheet({
           onClick={save}
         >
           <Check className="h-5 w-5" />
-          {folder ? "Save semester" : "Create year"}
+          {folder ? "Save semester" : createMode === "year" ? "Create year" : "Add semester"}
         </button>
         {folder && (
           <button
@@ -3874,7 +4117,6 @@ function MobileCourseSetupSheet({
 
 function MobileSettings() {
   const appMode = useCourseStore((state) => state.appMode ?? "custom");
-  const setAppMode = useCourseStore((state) => state.setAppMode);
   const universityThemeId = useCourseStore(
     (state) => state.universityThemeId ?? "uoft"
   );
@@ -3882,7 +4124,12 @@ function MobileSettings() {
   const customThemeId = useCourseStore((state) => state.customThemeId ?? "classic");
   const setCustomTheme = useCourseStore((state) => state.setCustomTheme);
   const folders = useCourseStore((state) => state.folders);
-  const [semesterSheet, setSemesterSheet] = useState<CourseFolder | null | "new">(null);
+  const [semesterSheet, setSemesterSheet] = useState<CourseFolder | null>(null);
+  const [createSemesterSheet, setCreateSemesterSheet] = useState<{
+    mode: "year" | "semester";
+    year?: string;
+  } | null>(null);
+  const customYearGroups = useMemo(() => groupFoldersByYear(folders), [folders]);
   const standalone = useStandalonePwa();
   const likelyIOS = useMemo(() => isLikelyIOSDevice(), []);
 
@@ -3908,7 +4155,9 @@ function MobileSettings() {
                 className={`min-h-12 rounded-2xl text-base font-black ${
                   active ? "bg-white text-slate-950 shadow-soft" : "text-slate-500"
                 }`}
-                onClick={() => setAppMode(option.id as "custom" | "university")}
+                onClick={() =>
+                  switchMobileAppMode(option.id as "custom" | "university")
+                }
               >
                 {option.label}
               </button>
@@ -4068,43 +4317,75 @@ function MobileSettings() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-                  Semesters
+                  Structure
                 </p>
                 <h2 className="text-xl font-black tracking-tight">
-                  Years and terms
+                  Years and semesters
                 </h2>
               </div>
               <button
                 type="button"
                 className="grid min-h-12 min-w-12 place-items-center rounded-2xl bg-slate-950 text-white active:scale-[0.98]"
-                onClick={() => setSemesterSheet("new")}
-                aria-label="Add semester"
+                onClick={() => setCreateSemesterSheet({ mode: "year" })}
+                aria-label="Add year"
               >
                 <Plus className="h-5 w-5" />
               </button>
             </div>
-            <div className="mt-4 space-y-2">
-              {folders.map((folder) => (
-                <button
-                  key={folder.id}
-                  type="button"
-                  className="flex min-h-[64px] w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left active:scale-[0.99]"
-                  onClick={() => setSemesterSheet(folder)}
+            <div className="mt-4 space-y-3">
+              {customYearGroups.map((group) => (
+                <div
+                  key={group.year}
+                  className="rounded-[1.35rem] border border-slate-200 bg-white p-3"
                 >
-                  <span
-                    className="h-10 w-2 rounded-full"
-                    style={{ backgroundColor: folder.color }}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-base font-black text-slate-950">
-                      {folderDisplayName(folder)}
-                    </span>
-                    <span className="block text-sm font-semibold text-slate-500">
-                      Tap to edit
-                    </span>
-                  </span>
-                  <Edit3 className="h-4 w-4 text-slate-400" />
-                </button>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-black text-slate-950">
+                        {group.year}
+                      </p>
+                      <p className="text-xs font-bold text-slate-400">
+                        {group.folders.length} semesters
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="grid min-h-10 min-w-10 place-items-center rounded-2xl border border-slate-200 bg-white text-slate-600 active:scale-[0.98]"
+                      onClick={() =>
+                        setCreateSemesterSheet({
+                          mode: "semester",
+                          year: group.year,
+                        })
+                      }
+                      aria-label={`Add semester to ${group.year}`}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {group.folders.map((folder) => (
+                      <button
+                        key={folder.id}
+                        type="button"
+                        className="flex min-h-[48px] items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-2.5 py-2 text-left active:scale-[0.99]"
+                        onClick={() => setSemesterSheet(folder)}
+                      >
+                        <span
+                          className="h-8 w-1.5 rounded-full"
+                          style={{ backgroundColor: folder.color }}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-black text-slate-950">
+                            {folder.name}
+                          </span>
+                          <span className="block text-[0.65rem] font-bold text-slate-400">
+                            Edit
+                          </span>
+                        </span>
+                        <Edit3 className="h-3.5 w-3.5 text-slate-400" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
               {folders.length === 0 && (
                 <p className="rounded-3xl border border-dashed border-slate-300 px-5 py-8 text-center text-base font-semibold text-slate-500">
@@ -4118,9 +4399,14 @@ function MobileSettings() {
       )}
 
       <MobileSemesterSheet
-        open={semesterSheet != null}
-        onClose={() => setSemesterSheet(null)}
-        folder={semesterSheet === "new" ? null : semesterSheet}
+        open={semesterSheet != null || createSemesterSheet != null}
+        onClose={() => {
+          setSemesterSheet(null);
+          setCreateSemesterSheet(null);
+        }}
+        folder={semesterSheet}
+        createMode={createSemesterSheet?.mode}
+        initialYear={createSemesterSheet?.year}
       />
     </div>
   );
