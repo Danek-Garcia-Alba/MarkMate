@@ -119,6 +119,41 @@ body {
   mask-image: linear-gradient(180deg, black, transparent 72%);
 }
 
+.app-shell[data-app-mode="custom"][data-theme-id="aurora"] {
+  background:
+    radial-gradient(circle at 84% 12%, rgba(45, 212, 191, 0.22), transparent 17rem),
+    radial-gradient(circle at 20% 82%, rgba(251, 113, 133, 0.18), transparent 18rem),
+    linear-gradient(135deg, #eef8f7 0%, #f8fafc 44%, #e2e8f0 100%);
+}
+
+.app-shell[data-app-mode="custom"][data-theme-id="neon"] {
+  background:
+    radial-gradient(circle at 82% 14%, rgba(6, 182, 212, 0.22), transparent 16rem),
+    radial-gradient(circle at 16% 82%, rgba(168, 85, 247, 0.2), transparent 18rem),
+    linear-gradient(135deg, #eef2ff 0%, #f8fafc 48%, #ecfeff 100%);
+}
+
+.app-shell[data-app-mode="custom"][data-theme-id="paper"] {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(22, 163, 74, 0.14), transparent 16rem),
+    radial-gradient(circle at 86% 76%, rgba(245, 158, 11, 0.16), transparent 17rem),
+    linear-gradient(135deg, #fffbeb 0%, #f8fafc 54%, #eef7ee 100%);
+}
+
+.app-shell[data-app-mode="custom"][data-theme-id="sunset"] {
+  background:
+    radial-gradient(circle at 82% 18%, rgba(251, 113, 133, 0.24), transparent 17rem),
+    radial-gradient(circle at 18% 80%, rgba(79, 70, 229, 0.16), transparent 18rem),
+    linear-gradient(135deg, #fff7ed 0%, #f8fafc 46%, #eef2ff 100%);
+}
+
+.app-shell[data-app-mode="custom"][data-theme-id="midnight"] {
+  background:
+    radial-gradient(circle at 80% 16%, rgba(245, 158, 11, 0.2), transparent 17rem),
+    radial-gradient(circle at 18% 82%, rgba(14, 165, 233, 0.14), transparent 18rem),
+    linear-gradient(135deg, #e5e7eb 0%, #f8fafc 44%, #dbeafe 100%);
+}
+
 .dark .app-shell {
   --theme-overlay: rgba(2, 6, 23, 0.84);
   background:

@@ -113,7 +113,16 @@ type UniversityThemeId =
   | "uottawa"
   | "mcgill";
 type AppMode = "university" | "custom";
-type CustomThemeId = "classic" | "bloom" | "circuit" | "meadow";
+type CustomThemeId =
+  | "classic"
+  | "aurora"
+  | "neon"
+  | "paper"
+  | "sunset"
+  | "midnight"
+  | "bloom"
+  | "circuit"
+  | "meadow";
 
 type AssignmentDraft = Omit<Assignment, "id">;
 type AssignmentMode = "single" | "bulk";
@@ -466,6 +475,51 @@ const CUSTOM_THEMES: Record<CustomThemeId, CustomTheme> = {
     primaryColor: "#0f172a",
     accentColor: "#0ea5e9",
     overlay: "rgba(248, 250, 252, 0.9)",
+  },
+  aurora: {
+    id: "aurora",
+    label: "Mint Slate",
+    tagline: "Soft graphite glass with the classic MarkMate green glow.",
+    backgroundImage: "",
+    primaryColor: "#172033",
+    accentColor: "#2dd4bf",
+    overlay: "rgba(240, 253, 250, 0.9)",
+  },
+  neon: {
+    id: "neon",
+    label: "Blue Lab",
+    tagline: "Clean academic blue with a crisp technical edge.",
+    backgroundImage: "",
+    primaryColor: "#312e81",
+    accentColor: "#06b6d4",
+    overlay: "rgba(238, 242, 255, 0.9)",
+  },
+  paper: {
+    id: "paper",
+    label: "Paper Desk",
+    tagline: "Warm paper, deep ink, and a calm green highlight.",
+    backgroundImage: "",
+    primaryColor: "#1f2933",
+    accentColor: "#16a34a",
+    overlay: "rgba(255, 251, 235, 0.9)",
+  },
+  sunset: {
+    id: "sunset",
+    label: "Rose Glass",
+    tagline: "MarkMate rose with a polished study-room tint.",
+    backgroundImage: "",
+    primaryColor: "#3730a3",
+    accentColor: "#fb7185",
+    overlay: "rgba(255, 247, 237, 0.9)",
+  },
+  midnight: {
+    id: "midnight",
+    label: "Night Focus",
+    tagline: "Navy, graphite, and a quiet gold highlight.",
+    backgroundImage: "",
+    primaryColor: "#020617",
+    accentColor: "#f59e0b",
+    overlay: "rgba(241, 245, 249, 0.9)",
   },
   bloom: {
     id: "bloom",

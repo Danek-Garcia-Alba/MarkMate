@@ -91,6 +91,11 @@ const universityOptions = [
 
 const customThemeOptions = [
   { id: "classic", label: "Studio Slate" },
+  { id: "aurora", label: "Mint Slate" },
+  { id: "neon", label: "Blue Lab" },
+  { id: "paper", label: "Paper Desk" },
+  { id: "sunset", label: "Rose Glass" },
+  { id: "midnight", label: "Night Focus" },
   { id: "bloom", label: "Bloom" },
   { id: "circuit", label: "Circuit" },
   { id: "meadow", label: "Meadow" },
@@ -273,6 +278,41 @@ function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
   };
 }
 
+function useHorizontalSwipeNavigation(
+  onNext: () => void,
+  onPrevious: () => void,
+  enabled = true
+) {
+  const startRef = useRef<{ x: number; y: number; active: boolean } | null>(null);
+
+  return {
+    onPointerDown: (event: React.PointerEvent<HTMLElement>) => {
+      if (!enabled || isInteractiveSwipeTarget(event.target)) return;
+      startRef.current = {
+        x: event.clientX,
+        y: event.clientY,
+        active: true,
+      };
+    },
+    onPointerUp: (event: React.PointerEvent<HTMLElement>) => {
+      const start = startRef.current;
+      startRef.current = null;
+      if (!enabled || !start?.active) return;
+      const dx = event.clientX - start.x;
+      const dy = event.clientY - start.y;
+      if (Math.abs(dx) <= 72 || Math.abs(dx) <= Math.abs(dy) * 1.45) return;
+      if (dx > 0) {
+        onNext();
+      } else {
+        onPrevious();
+      }
+    },
+    onPointerCancel: () => {
+      startRef.current = null;
+    },
+  };
+}
+
 function schoolLogoSrc(themeId: string) {
   const logos: Record<string, string> = {
     uoft: "/logos/uoft-logo.png",
@@ -292,16 +332,34 @@ function schoolLogoSrc(themeId: string) {
 
 function schoolLogoScale(themeId: string) {
   const scales: Record<string, number> = {
-    uoft: 1.72,
-    western: 1.42,
-    york: 1.42,
-    waterloo: 1.42,
-    laurier: 1.42,
-    guelph: 1.72,
+    uoft: 1.16,
+    western: 1.28,
+    york: 1.18,
+    waterloo: 1.22,
+    laurier: 1.18,
+    guelph: 1.16,
     tmu: 1,
-    uottawa: 1.36,
+    uottawa: 1.04,
   };
   return scales[themeId] ?? 1.04;
+}
+
+function customSlatePreview(themeId: string) {
+  const previews: Record<
+    string,
+    { primary: string; accent: string; wash: string }
+  > = {
+    classic: { primary: "#0f172a", accent: "#34d399", wash: "#f8fafc" },
+    aurora: { primary: "#172033", accent: "#2dd4bf", wash: "#f0fdfa" },
+    neon: { primary: "#1e3a8a", accent: "#38bdf8", wash: "#eff6ff" },
+    paper: { primary: "#1f2933", accent: "#16a34a", wash: "#fffbeb" },
+    sunset: { primary: "#be123c", accent: "#fb7185", wash: "#fff1f2" },
+    midnight: { primary: "#020617", accent: "#f59e0b", wash: "#f8fafc" },
+    bloom: { primary: "#be123c", accent: "#0f766e", wash: "#fff7fa" },
+    circuit: { primary: "#1d4ed8", accent: "#475569", wash: "#f4f8ff" },
+    meadow: { primary: "#166534", accent: "#b45309", wash: "#f6fcf7" },
+  };
+  return previews[themeId] ?? previews.classic;
 }
 
 function useGpaReport() {
@@ -424,6 +482,7 @@ function MobileBottomSheet({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const sheetSwipeHandlers = useHorizontalSwipeExit(onClose, open);
   if (!open || typeof document === "undefined") return null;
 
   return createPortal(
@@ -443,6 +502,18 @@ function MobileBottomSheet({
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+          sheetSwipeHandlers.onPointerDown(event);
+        }}
+        onPointerUp={(event) => {
+          event.stopPropagation();
+          sheetSwipeHandlers.onPointerUp(event);
+        }}
+        onPointerCancel={(event) => {
+          event.stopPropagation();
+          sheetSwipeHandlers.onPointerCancel();
+        }}
       >
         <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-slate-200" />
         <div className="mb-5 flex items-center justify-between gap-3">
@@ -949,6 +1020,50 @@ function EmptyCourses({ onAddCourse }: { onAddCourse: () => void }) {
   );
 }
 
+function EmptyCustomStructure({
+  onAddYear,
+  onQuickCourse,
+}: {
+  onAddYear: () => void;
+  onQuickCourse: () => void;
+}) {
+  return (
+    <section className="rounded-[2rem] border border-white/70 bg-white/95 p-5 shadow-soft backdrop-blur">
+      <div className="flex items-start gap-4">
+        <MarkMateLogo size="md" className="shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+            Custom setup
+          </p>
+          <h2 className="mt-1 text-2xl font-black tracking-tight">
+            Build your year first.
+          </h2>
+          <p className="mt-2 text-base leading-relaxed text-slate-500">
+            Add any year, any semester, then place courses inside it.
+          </p>
+        </div>
+      </div>
+      <div className="mt-5 grid grid-cols-[1.15fr_0.85fr] gap-2">
+        <button
+          type="button"
+          className="mobile-glow-action inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-4 text-base font-black active:scale-[0.98]"
+          onClick={onAddYear}
+        >
+          <Plus className="h-5 w-5" />
+          New year
+        </button>
+        <button
+          type="button"
+          className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 text-base font-black text-slate-700 active:scale-[0.98]"
+          onClick={onQuickCourse}
+        >
+          Quick course
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function MobileIdentityCard({
   courseCount,
   semesterCount,
@@ -1050,20 +1165,25 @@ function MobileHomeCommandPanel({
   report,
   nextAssignment,
   onAddCourse,
+  onGoCourses,
   onGoCalendar,
   onOpenGpa,
   onOpenCourse,
+  folderCount,
 }: {
   report: UniversityGpaReport;
   nextAssignment?: { course: Course; assignment: Assignment };
   onAddCourse: () => void;
+  onGoCourses: () => void;
   onGoCalendar: () => void;
   onOpenGpa: () => void;
   onOpenCourse: (courseId: string) => void;
+  folderCount: number;
 }) {
   const appMode = useCourseStore((state) => state.appMode ?? "custom");
   const primaryLabel =
     appMode === "university" ? report.policy.shortName : "MarkMate";
+  const needsCustomSetup = appMode === "custom" && folderCount === 0;
 
   return (
     <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
@@ -1093,7 +1213,11 @@ function MobileHomeCommandPanel({
         type="button"
         className="mt-4 flex min-h-[76px] w-full items-center gap-3 rounded-2xl bg-slate-950 px-4 py-3 text-left text-white active:scale-[0.99]"
         onClick={() =>
-          nextAssignment ? onOpenCourse(nextAssignment.course.id) : onAddCourse()
+          nextAssignment
+            ? onOpenCourse(nextAssignment.course.id)
+            : needsCustomSetup
+            ? onGoCourses()
+            : onAddCourse()
         }
       >
         <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/12">
@@ -1104,13 +1228,16 @@ function MobileHomeCommandPanel({
             {nextAssignment ? "Next up" : "Start here"}
           </span>
           <span className="mt-0.5 block truncate text-xl font-black">
-            {nextAssignment?.assignment.title || "Add a course"}
+            {nextAssignment?.assignment.title ||
+              (needsCustomSetup ? "Create a year" : "Add a course")}
           </span>
           <span className="mt-0.5 block truncate text-sm font-semibold text-white/58">
             {nextAssignment
               ? `${nextAssignment.course.name} / ${formatShortDate(
                   nextAssignment.assignment.dueDate
                 )}`
+              : needsCustomSetup
+              ? "Set up any year and semester first."
               : "Name it once, then add assignments inside it."}
           </span>
         </span>
@@ -1121,10 +1248,10 @@ function MobileHomeCommandPanel({
         <button
           type="button"
           className="mobile-glow-action inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-3 text-base font-black active:scale-[0.98]"
-          onClick={onAddCourse}
+          onClick={needsCustomSetup ? onGoCourses : onAddCourse}
         >
           <Plus className="h-5 w-5" />
-          New course
+          {needsCustomSetup ? "New year" : "New course"}
         </button>
         <button
           type="button"
@@ -1190,9 +1317,11 @@ function MobileDashboard({
         report={report}
         nextAssignment={nextAssignment}
         onAddCourse={onAddCourse}
+        onGoCourses={onGoCourses}
         onGoCalendar={onGoCalendar}
         onOpenGpa={onOpenGpa}
         onOpenCourse={onOpenCourse}
+        folderCount={folders.length}
       />
 
       {courses.length > 0 && (
@@ -1337,8 +1466,13 @@ function MobileCourses({
 }) {
   const courses = useCourseStore((state) => state.courses);
   const folders = useCourseStore((state) => state.folders);
+  const appMode = useCourseStore((state) => state.appMode ?? "custom");
   const [query, setQuery] = useState("");
   const [activeScope, setActiveScope] = useState<string | null>(null);
+  const [semesterSheet, setSemesterSheet] = useState<CourseFolder | null | "new">(
+    null
+  );
+  const isCustomMode = appMode === "custom";
   const foldersById = useMemo(
     () =>
       new Map<string, CourseFolder>(
@@ -1493,7 +1627,7 @@ function MobileCourses({
             className="min-h-11 w-full rounded-2xl border border-slate-200 bg-white pl-12 pr-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search CIV344 or Essay"
+            placeholder="Search CIV312, COG260, APS100"
             onKeyDown={blurMobileInputOnEnter}
             onBlur={settleMobileInputAfterBlur}
           />
@@ -1518,7 +1652,14 @@ function MobileCourses({
       </section>
 
       {courses.length === 0 && folders.length === 0 ? (
-        <EmptyCourses onAddCourse={() => onAddCourse()} />
+        isCustomMode ? (
+          <EmptyCustomStructure
+            onAddYear={() => setSemesterSheet("new")}
+            onQuickCourse={() => onAddCourse(null)}
+          />
+        ) : (
+          <EmptyCourses onAddCourse={() => onAddCourse()} />
+        )
       ) : query.trim() ? (
         <section className="rounded-[1.65rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
           <p className="text-xs font-black uppercase tracking-wide text-slate-500">
@@ -1585,6 +1726,11 @@ function MobileCourses({
           </div>
         </section>
       )}
+      <MobileSemesterSheet
+        open={semesterSheet != null}
+        onClose={() => setSemesterSheet(null)}
+        folder={semesterSheet === "new" ? null : semesterSheet}
+      />
     </div>
   );
 }
@@ -1628,12 +1774,12 @@ function MobileCourseCreateSheet({
             are the next obvious step.
           </p>
         </div>
-        <MobileField label="Course name" hint="Examples: CIV 344, BIO 130, Calculus">
+        <MobileField label="Course name" hint="Examples: CIV312, COG260, APS100, CIV100">
           <input
             className="min-h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Course name"
+            placeholder="CIV312"
             onKeyDown={blurMobileInputOnEnter}
             onBlur={settleMobileInputAfterBlur}
           />
@@ -3267,25 +3413,35 @@ function MobileSemesterSheet({
 
   return (
     <MobileBottomSheet
-      title={folder ? "Edit semester" : "Add semester"}
+      title={folder ? "Edit semester" : "New year"}
       open={open}
       onClose={onClose}
     >
       <div className="space-y-4">
-        <MobileField label="Semester name">
+        <MobileField
+          label="Semester"
+          hint="Use any name: Fall, Block 1, Term A, Summer."
+        >
           <input
             className="min-h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="Fall, Winter, Summer"
+            placeholder="Fall"
+            onKeyDown={blurMobileInputOnEnter}
+            onBlur={settleMobileInputAfterBlur}
           />
         </MobileField>
-        <MobileField label="Year">
+        <MobileField
+          label="Year"
+          hint="Custom mode can be anything: Year 1, Grade 12, Bootcamp."
+        >
           <input
             className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
             value={year}
             onChange={(event) => setYear(event.target.value)}
             placeholder="Year 1"
+            onKeyDown={blurMobileInputOnEnter}
+            onBlur={settleMobileInputAfterBlur}
           />
         </MobileField>
         <MobileField label="Color">
@@ -3315,7 +3471,7 @@ function MobileSemesterSheet({
           onClick={save}
         >
           <Check className="h-5 w-5" />
-          Save semester
+          {folder ? "Save semester" : "Create year"}
         </button>
         {folder && (
           <button
@@ -3561,23 +3717,45 @@ function MobileSettings() {
           <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
             <div className="mb-4 flex items-center gap-3">
               <Sparkles className="h-6 w-6 text-slate-400" />
-              <h2 className="text-2xl font-black tracking-tight">Theme</h2>
+              <h2 className="text-2xl font-black tracking-tight">Slates</h2>
             </div>
             <div className="grid grid-cols-2 gap-3">
               {customThemeOptions.map((option) => {
                 const active = customThemeId === option.id;
+                const preview = customSlatePreview(option.id);
                 return (
                   <button
                     key={option.id}
                     type="button"
-                    className={`min-h-14 rounded-2xl border px-3 text-base font-black ${
+                    className={`min-h-[4.6rem] rounded-2xl border p-3 text-left active:scale-[0.99] ${
                       active
-                        ? "border-slate-950 bg-slate-950 text-white"
-                        : "border-slate-200 bg-white text-slate-700"
+                        ? "border-slate-950 text-slate-950 shadow-soft"
+                        : "border-slate-200 text-slate-700"
                     }`}
+                    style={{
+                      background:
+                        `linear-gradient(135deg, ${preview.wash}, #ffffff 58%, color-mix(in srgb, ${preview.accent} 10%, white))`,
+                    }}
                     onClick={() => setCustomTheme(option.id)}
                   >
-                    {option.label}
+                    <span className="flex items-center gap-1.5">
+                      <span
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: preview.primary }}
+                      />
+                      <span
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: preview.accent }}
+                      />
+                    </span>
+                    <span className="mt-2 block text-sm font-black leading-tight">
+                      {option.label}
+                    </span>
+                    {active && (
+                      <span className="mt-1 block text-[0.68rem] font-black uppercase tracking-wide text-slate-400">
+                        Active
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -3589,7 +3767,9 @@ function MobileSettings() {
                 <p className="text-xs font-black uppercase tracking-wide text-slate-500">
                   Semesters
                 </p>
-                <h2 className="text-xl font-black tracking-tight">Custom setup</h2>
+                <h2 className="text-xl font-black tracking-tight">
+                  Years and terms
+                </h2>
               </div>
               <button
                 type="button"
@@ -3625,7 +3805,8 @@ function MobileSettings() {
               ))}
               {folders.length === 0 && (
                 <p className="rounded-3xl border border-dashed border-slate-300 px-5 py-8 text-center text-base font-semibold text-slate-500">
-                  Add semesters so courses are easier to find.
+                  Add your first year and semester. Custom mode stays blank until
+                  you decide the structure.
                 </p>
               )}
             </div>
@@ -3677,6 +3858,31 @@ export default function MobileApp() {
     setCourseCreateFolderId(folderId ?? null);
     setCourseCreateOpen(true);
   };
+  const goToTab = (tab: MobileTab) => {
+    setSelectedCourseId(null);
+    setActiveTab(tab);
+  };
+  const goToNextTab = () => {
+    setSelectedCourseId(null);
+    setActiveTab((current) => {
+      const index = mobileTabs.findIndex((tab) => tab.id === current);
+      if (index < 0 || index >= mobileTabs.length - 1) return current;
+      return mobileTabs[index + 1].id;
+    });
+  };
+  const goToPreviousTab = () => {
+    setSelectedCourseId(null);
+    setActiveTab((current) => {
+      const index = mobileTabs.findIndex((tab) => tab.id === current);
+      if (index <= 0) return current;
+      return mobileTabs[index - 1].id;
+    });
+  };
+  const tabSwipeHandlers = useHorizontalSwipeNavigation(
+    goToNextTab,
+    goToPreviousTab,
+    !showCourseDetail && !courseCreateOpen && !gpaOpen
+  );
 
   const hasUniversitySemesterLayout = useMemo(
     () =>
@@ -3720,7 +3926,10 @@ export default function MobileApp() {
         } as React.CSSProperties
       }
     >
-      <main className="mx-auto min-h-[100dvh] w-full max-w-md px-5 pb-28 pt-[calc(env(safe-area-inset-top)+0.6rem)]">
+      <main
+        className="mx-auto min-h-[100dvh] w-full max-w-md px-5 pb-28 pt-[calc(env(safe-area-inset-top)+0.6rem)]"
+        {...tabSwipeHandlers}
+      >
         {!showCourseDetail && (
           <header className="sticky top-0 z-20 -mx-5 mb-4 border-b border-white/70 bg-white/86 px-5 pb-3 pt-[calc(env(safe-area-inset-top)+0.6rem)] shadow-[0_16px_42px_-34px_rgba(15,23,42,0.5)] backdrop-blur">
             <div className="flex items-center gap-3">
@@ -3793,10 +4002,7 @@ export default function MobileApp() {
                     backgroundColor: active ? activeTheme.primaryColor : "transparent",
                     WebkitTapHighlightColor: "transparent",
                   }}
-                  onClick={() => {
-                    setSelectedCourseId(null);
-                    setActiveTab(tab.id);
-                  }}
+                  onClick={() => goToTab(tab.id)}
                 >
                   <Icon className="h-5 w-5" />
                   {tab.label}
