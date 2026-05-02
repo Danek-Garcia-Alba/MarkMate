@@ -1955,28 +1955,30 @@ function MobileCourseCreateSheet({
           />
         </MobileField>
         <MobileField label="Semester">
-          <select
-            ref={folderSelectRef}
-            className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
-            value={folderId ?? ""}
-            onChange={(event) => setFolderId(event.target.value || null)}
-          >
-            <option value="">Unfiled</option>
-            {folders.map((folder) => (
-              <option key={folder.id} value={folder.id}>
-                {folderDisplayName(folder)}
-              </option>
-            ))}
-          </select>
+          <div className="space-y-3">
+            <select
+              ref={folderSelectRef}
+              className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+              value={folderId ?? ""}
+              onChange={(event) => setFolderId(event.target.value || null)}
+            >
+              <option value="">Unfiled</option>
+              {folders.map((folder) => (
+                <option key={folder.id} value={folder.id}>
+                  {folderDisplayName(folder)}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="mobile-glow-action inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-black active:scale-[0.98]"
+              {...submitTouchProps}
+            >
+              <Check className="h-5 w-5" />
+              Add course
+            </button>
+          </div>
         </MobileField>
-        <button
-          type="button"
-          className="mobile-glow-action inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-black active:scale-[0.98]"
-          {...submitTouchProps}
-        >
-          <Check className="h-5 w-5" />
-          Add course
-        </button>
       </div>
     </MobileBottomSheet>
   );
