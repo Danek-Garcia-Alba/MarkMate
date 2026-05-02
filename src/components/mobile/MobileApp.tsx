@@ -271,6 +271,7 @@ function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
     y: number;
     active: boolean;
     swiping: boolean;
+    time: number;
   } | null>(null);
 
   const completeSwipe = (x: number, y: number) => {
@@ -279,7 +280,13 @@ function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
     if (!enabled || !start?.active) return;
     const dx = x - start.x;
     const dy = y - start.y;
-    if (Math.abs(dx) > 72 && Math.abs(dx) > Math.abs(dy) * 1.45) {
+    const absX = Math.abs(dx);
+    const velocity = absX / Math.max(Date.now() - start.time, 1);
+    if (
+      dx > 0 &&
+      (absX > 56 || (absX > 36 && velocity > 0.55)) &&
+      absX > Math.abs(dy) * 1.35
+    ) {
       onExit();
     }
   };
@@ -293,6 +300,7 @@ function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
         y: event.clientY,
         active: true,
         swiping: false,
+        time: Date.now(),
       };
     },
     onPointerUp: (event: React.PointerEvent<HTMLElement>) => {
@@ -306,7 +314,12 @@ function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
       if (!enabled || isInteractiveSwipeTarget(event.target)) return;
       const point = swipeTouchPoint(event, "touches");
       if (!point) return;
-      startRef.current = { ...point, active: true, swiping: false };
+      startRef.current = {
+        ...point,
+        active: true,
+        swiping: false,
+        time: Date.now(),
+      };
     },
     onTouchMove: (event: React.TouchEvent<HTMLElement>) => {
       const start = startRef.current;
@@ -340,6 +353,7 @@ function useHorizontalSwipeNavigation(
     y: number;
     active: boolean;
     swiping: boolean;
+    time: number;
   } | null>(null);
 
   const completeSwipe = (x: number, y: number) => {
@@ -348,8 +362,15 @@ function useHorizontalSwipeNavigation(
     if (!enabled || !start?.active) return;
     const dx = x - start.x;
     const dy = y - start.y;
-    if (Math.abs(dx) <= 72 || Math.abs(dx) <= Math.abs(dy) * 1.45) return;
-    if (dx > 0) {
+    const absX = Math.abs(dx);
+    const velocity = absX / Math.max(Date.now() - start.time, 1);
+    if (
+      (absX <= 56 && !(absX > 36 && velocity > 0.55)) ||
+      absX <= Math.abs(dy) * 1.35
+    ) {
+      return;
+    }
+    if (dx < 0) {
       onNext();
     } else {
       onPrevious();
@@ -365,6 +386,7 @@ function useHorizontalSwipeNavigation(
         y: event.clientY,
         active: true,
         swiping: false,
+        time: Date.now(),
       };
     },
     onPointerUp: (event: React.PointerEvent<HTMLElement>) => {
@@ -378,7 +400,12 @@ function useHorizontalSwipeNavigation(
       if (!enabled || isInteractiveSwipeTarget(event.target)) return;
       const point = swipeTouchPoint(event, "touches");
       if (!point) return;
-      startRef.current = { ...point, active: true, swiping: false };
+      startRef.current = {
+        ...point,
+        active: true,
+        swiping: false,
+        time: Date.now(),
+      };
     },
     onTouchMove: (event: React.TouchEvent<HTMLElement>) => {
       const start = startRef.current;
@@ -1891,11 +1918,10 @@ function MobileCourseCreateSheet({
 
   return (
     <MobileBottomSheet title="New course" open={open} onClose={onClose}>
-      <div className="space-y-4">
-        <div className="rounded-3xl bg-slate-950 p-4 text-white">
-          <p className="text-base font-bold leading-relaxed text-white/72">
-            Create the course first. MarkMate opens it right away so assignments
-            are the next obvious step.
+      <div className="space-y-3 pb-1">
+        <div className="rounded-[1.35rem] bg-slate-950 px-4 py-3 text-white">
+          <p className="text-sm font-bold leading-relaxed text-white/72">
+            Add it once. MarkMate opens the course next so assignments are ready.
           </p>
         </div>
         <MobileField label="Course name" hint="Examples: CIV312, COG260, APS100, CIV100">
@@ -1926,7 +1952,7 @@ function MobileCourseCreateSheet({
         </MobileField>
         <button
           type="button"
-          className="mobile-glow-action inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-bold active:scale-[0.98]"
+          className="mobile-glow-action sticky bottom-[calc(env(safe-area-inset-bottom)+0.35rem)] z-10 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-bold shadow-[0_20px_42px_-22px_var(--theme-primary)] active:scale-[0.98]"
           onPointerDown={(event) => {
             if (event.pointerType !== "touch") return;
             event.preventDefault();
@@ -1936,7 +1962,7 @@ function MobileCourseCreateSheet({
           onClick={submit}
         >
           <Plus className="h-5 w-5" />
-          Create course
+          Add course
         </button>
       </div>
     </MobileBottomSheet>
