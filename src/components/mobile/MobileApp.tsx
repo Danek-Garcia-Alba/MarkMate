@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowLeft,
   BookOpen,
@@ -176,43 +177,21 @@ function normalizeMobileDateInput(value: string): string | null {
   return null;
 }
 
-function parseMobileStatus(value: string): AssignmentStatus {
-  const v = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
-  if (v === "done" || v === "complete") return "completed";
-  if (v === "progress" || v === "started") return "in_progress";
-  if (v === "late") return "overdue";
-  if (
-    v === "completed" ||
-    v === "in_progress" ||
-    v === "not_started" ||
-    v === "overdue"
-  ) {
-    return v;
-  }
-  return "not_started";
-}
-
-function schoolMarkLetters(themeId: string, label: string) {
-  const marks: Record<string, string> = {
-    uoft: "UT",
-    western: "W",
-    queens: "Q",
-    york: "Y",
-    tmu: "TM",
-    waterloo: "UW",
-    laurier: "WL",
-    brock: "B",
-    guelph: "G",
-    uottawa: "OU",
-    mcgill: "M",
+function schoolLogoSrc(themeId: string) {
+  const logos: Record<string, string> = {
+    uoft: "/logos/uoft-logo.png",
+    western: "/logos/western-logo.png",
+    queens: "/logos/queens-logo.png",
+    york: "/logos/york-logo.png",
+    tmu: "/logos/tmu-logo.png",
+    waterloo: "/logos/waterloo-logo.png",
+    laurier: "/logos/laurier-logo.png",
+    brock: "/logos/brock-logo.png",
+    guelph: "/logos/guelph-logo.png",
+    uottawa: "/logos/uottawa-logo.png",
+    mcgill: "/logos/mcgill-logo.png",
   };
-  if (marks[themeId]) return marks[themeId];
-  return label
-    .split(/\s+/)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  return logos[themeId] ?? "";
 }
 
 function useGpaReport() {
@@ -335,13 +314,13 @@ function MobileBottomSheet({
   onClose: () => void;
   children: React.ReactNode;
 }) {
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-40 overscroll-none bg-slate-950/35"
+      className="fixed inset-0 z-[80] overscroll-none bg-slate-950/35"
       role="presentation"
-      style={{ position: "fixed", zIndex: 40 }}
+      style={{ position: "fixed", zIndex: 80 }}
     >
       <button
         type="button"
@@ -371,7 +350,8 @@ function MobileBottomSheet({
         </div>
         {children}
       </section>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -421,35 +401,37 @@ function MobileMetric({
 }
 
 function MobileSchoolMark({
-  image,
   themeId,
   label,
   className = "",
 }: {
-  image?: string;
   themeId: string;
   label: string;
   className?: string;
 }) {
-  if (!image) {
+  const logoSrc = schoolLogoSrc(themeId);
+
+  if (!logoSrc) {
     return <MarkMateLogo size="sm" className={className} />;
   }
 
-  const letters = schoolMarkLetters(themeId, label);
-
   return (
     <span
-      className={`relative grid h-14 w-20 shrink-0 place-items-center overflow-hidden rounded-[1.15rem] border border-white/35 bg-slate-950 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_18px_34px_-28px_rgba(15,23,42,0.65)] ${className}`}
+      className={`relative grid h-14 w-20 shrink-0 place-items-center overflow-hidden rounded-[1.15rem] border border-white/45 bg-white/25 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.5),0_18px_34px_-28px_rgba(15,23,42,0.65)] backdrop-blur ${className}`}
       style={{
         backgroundImage:
-          "radial-gradient(circle at 18% 16%, color-mix(in srgb, var(--theme-accent) 48%, white), transparent 28%), linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 92%, #020617), color-mix(in srgb, var(--theme-accent) 42%, #0f172a))",
+          "radial-gradient(circle at 16% 10%, rgba(255,255,255,0.82), transparent 24%), linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 18%, white), rgba(255,255,255,0.62))",
       }}
       role="img"
       aria-label={`${label} logo`}
     >
-      <span className="absolute inset-x-2 top-2 h-px rounded-full bg-white/35" />
-      <span className="text-xl font-black tracking-tight">{letters}</span>
-      <span className="absolute bottom-2 h-1 w-9 rounded-full bg-white/70" />
+      <span className="absolute inset-0 rounded-[1.15rem] border border-white/35" />
+      <img
+        src={logoSrc}
+        alt=""
+        className="relative z-[1] h-full w-full object-contain drop-shadow-[0_10px_18px_rgba(15,23,42,0.18)]"
+        draggable={false}
+      />
     </span>
   );
 }
@@ -741,7 +723,6 @@ function MobileIdentityCard({
           <div className="min-w-0">
             <div className="flex items-center gap-3">
               <MobileSchoolMark
-                image={activeTheme.backgroundImage}
                 themeId={activeTheme.id}
                 label={activeTheme.label}
                 className="ring-white/35"
@@ -1400,29 +1381,8 @@ const blankMobileBulkRow = (): MobileBulkAssignmentDraft => ({
   grade: "",
 });
 
-function parseMobileBulkLines(text: string): MobileBulkAssignmentDraft[] {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const delimiter = line.includes("|")
-        ? "|"
-        : line.includes("\t")
-        ? "\t"
-        : ",";
-      const [title = "", dueDate = "", weight = "", status = "", grade = ""] =
-        line.split(delimiter).map((part) => part.trim());
-      return {
-        rowId: mobileId(),
-        title,
-        dueDate,
-        weight,
-        status: parseMobileStatus(status),
-        grade,
-      };
-    });
-}
+const mobileBulkRows = (count: number) =>
+  Array.from({ length: count }, () => blankMobileBulkRow());
 
 function MobileAssignmentComposer({
   course,
@@ -1442,11 +1402,9 @@ function MobileAssignmentComposer({
   const [grade, setGrade] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [status, setStatus] = useState<AssignmentStatus>("not_started");
-  const [bulkText, setBulkText] = useState("");
-  const [bulkRows, setBulkRows] = useState<MobileBulkAssignmentDraft[]>([
-    blankMobileBulkRow(),
-    blankMobileBulkRow(),
-  ]);
+  const [bulkRows, setBulkRows] = useState<MobileBulkAssignmentDraft[]>(
+    mobileBulkRows(6)
+  );
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -1455,8 +1413,7 @@ function MobileAssignmentComposer({
     setGrade("");
     setDueDate("");
     setStatus("not_started");
-    setBulkText("");
-    setBulkRows([blankMobileBulkRow(), blankMobileBulkRow()]);
+    setBulkRows(mobileBulkRows(6));
     setError("");
   }, [course.id]);
 
@@ -1491,18 +1448,22 @@ function MobileAssignmentComposer({
     setError("");
   };
 
-  const parseBulkText = () => {
-    const parsed = parseMobileBulkLines(bulkText);
-    if (!parsed.length) return;
-    setBulkRows((rows) => [
-      ...rows.filter((row) =>
-        [row.title, row.dueDate, row.weight, row.grade].some((value) =>
-          value.trim()
-        )
-      ),
-      ...parsed,
-    ]);
-    setBulkText("");
+  const duplicateBulkRow = (rowId: string) => {
+    setBulkRows((rows) => {
+      const index = rows.findIndex((row) => row.rowId === rowId);
+      if (index === -1) return rows;
+      const copy = { ...rows[index], rowId: mobileId() };
+      return [...rows.slice(0, index + 1), copy, ...rows.slice(index + 1)];
+    });
+    setError("");
+  };
+
+  const removeBulkRow = (rowId: string) => {
+    setBulkRows((rows) =>
+      rows.length <= 1
+        ? [blankMobileBulkRow()]
+        : rows.filter((row) => row.rowId !== rowId)
+    );
     setError("");
   };
 
@@ -1653,84 +1614,103 @@ function MobileAssignmentComposer({
           </button>
         </div>
       ) : (
-        <div className="mt-3 space-y-3">
-          <textarea
-            className="min-h-24 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
-            value={bulkText}
-            onChange={(event) => setBulkText(event.target.value)}
-            placeholder="Essay | 2026-02-14 | 15 | completed | 88"
-          />
-          <button
-            type="button"
-            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-base font-black text-slate-600 active:scale-[0.98] disabled:opacity-45"
-            onClick={parseBulkText}
-            disabled={!bulkText.trim()}
-          >
-            <ClipboardList className="h-5 w-5" />
-            Parse lines
-          </button>
-          <div className="space-y-2">
-            {bulkRows.map((row) => (
-              <div
-                key={row.rowId}
-                className="rounded-2xl border border-slate-200 bg-white p-3"
-              >
-                <input
-                  className="min-h-11 w-full rounded-xl bg-slate-50 px-3 text-base font-black text-slate-950 outline-none focus:ring-2 focus:ring-slate-950/10"
-                  value={row.title}
-                  onChange={(event) =>
-                    updateBulkRow(row.rowId, { title: event.target.value })
-                  }
-                  placeholder="Assignment"
-                />
-                <div className="mt-2 grid grid-cols-3 gap-2">
+        <div className="mt-3 space-y-2">
+          <div className="rounded-2xl border border-slate-200 bg-white p-2">
+            <div className="grid grid-cols-[1rem_minmax(3.4rem,1fr)_2.15rem_2.15rem_3rem_1.55rem_1.55rem] gap-0.5 px-1 pb-1 text-[0.6rem] font-black uppercase tracking-wide text-slate-400">
+              <span>#</span>
+              <span>Name</span>
+              <span>Wt</span>
+              <span>Gr</span>
+              <span>Date</span>
+              <span />
+              <span />
+            </div>
+            <div
+              className={`space-y-1 pr-1 ${
+                bulkRows.length > 11
+                  ? "max-h-[26rem] overflow-y-auto overscroll-contain"
+                  : ""
+              }`}
+            >
+              {bulkRows.map((row, index) => (
+                <div
+                  key={row.rowId}
+                  className="grid grid-cols-[1rem_minmax(3.4rem,1fr)_2.15rem_2.15rem_3rem_1.55rem_1.55rem] items-center gap-0.5"
+                >
+                  <span className="text-center text-[0.7rem] font-black tabular-nums text-slate-400">
+                    {index + 1}
+                  </span>
                   <input
-                    className="min-h-10 rounded-xl border border-slate-200 bg-white px-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-950/10"
-                    value={row.dueDate}
+                    className="h-8 min-w-0 rounded-lg bg-slate-50 px-1.5 text-[0.72rem] font-black text-slate-950 outline-none focus:ring-2 focus:ring-slate-950/10"
+                    value={row.title}
                     onChange={(event) =>
-                      updateBulkRow(row.rowId, { dueDate: event.target.value })
+                      updateBulkRow(row.rowId, { title: event.target.value })
                     }
-                    placeholder="Date"
+                    placeholder="Quiz"
                   />
                   <input
-                    className="min-h-10 rounded-xl border border-slate-200 bg-white px-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-950/10"
+                    className="h-8 min-w-0 rounded-lg border border-slate-200 bg-white px-1 text-[0.68rem] font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-950/10"
                     inputMode="decimal"
                     value={row.weight}
                     onChange={(event) =>
                       updateBulkRow(row.rowId, { weight: event.target.value })
                     }
-                    placeholder="Wt"
+                    placeholder="10"
                   />
                   <input
-                    className="min-h-10 rounded-xl border border-slate-200 bg-white px-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-950/10"
+                    className="h-8 min-w-0 rounded-lg border border-slate-200 bg-white px-1 text-[0.68rem] font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-950/10"
                     inputMode="decimal"
                     value={row.grade}
                     onChange={(event) =>
                       updateBulkRow(row.rowId, { grade: event.target.value })
                     }
-                    placeholder="Grade"
+                    placeholder="88"
                   />
+                  <input
+                    className="h-8 min-w-0 rounded-lg border border-slate-200 bg-white px-1 text-[0.62rem] font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-950/10"
+                    value={row.dueDate}
+                    onChange={(event) =>
+                      updateBulkRow(row.rowId, { dueDate: event.target.value })
+                    }
+                    placeholder="5/8"
+                  />
+                  <button
+                    type="button"
+                    className="grid h-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 active:scale-[0.96]"
+                    onClick={() => duplicateBulkRow(row.rowId)}
+                    aria-label={`Duplicate row ${index + 1}`}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    className="grid h-8 place-items-center rounded-lg border border-rose-100 bg-rose-50 text-rose-600 active:scale-[0.96]"
+                    onClick={() => removeBulkRow(row.rowId)}
+                    aria-label={`Delete row ${index + 1}`}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-          <div className="grid grid-cols-1 gap-2">
+          <div className="grid grid-cols-[0.8fr_1.2fr] gap-2">
             <button
               type="button"
-              className="min-h-11 rounded-2xl border border-slate-200 bg-white px-4 text-base font-black text-slate-600 active:scale-[0.98]"
+              className="min-h-10 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-600 active:scale-[0.98]"
               onClick={() => setBulkRows((rows) => [...rows, blankMobileBulkRow()])}
             >
-              Row
+              Add row
+            </button>
+            <button
+              type="button"
+              className="mobile-glow-action inline-flex min-h-10 items-center justify-center gap-2 rounded-2xl px-3 text-sm font-black active:scale-[0.98]"
+              onClick={saveBulk}
+            >
+              <ListPlus className="h-4 w-4" />
+              Add bulk
             </button>
           </div>
-          <button
-            type="button"
-            className="mobile-glow-action inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-black active:scale-[0.98]"
-            onClick={saveBulk}
-          >
-            <ListPlus className="h-5 w-5" />
-            Add bulk
-          </button>
         </div>
       )}
 
@@ -2036,16 +2016,11 @@ function MobileCourseDetail({
   onBack: () => void;
 }) {
   const courses = useCourseStore((state) => state.courses);
-  const folders = useCourseStore((state) => state.folders);
   const renameCourse = useCourseStore((state) => state.renameCourse);
-  const moveCourseToFolder = useCourseStore((state) => state.moveCourseToFolder);
-  const updateCourse = useCourseStore((state) => state.updateCourse);
-  const removeCourse = useCourseStore((state) => state.removeCourse);
   const [assignmentSheet, setAssignmentSheet] = useState<Assignment | null>(null);
   const [assignmentComposerMode, setAssignmentComposerMode] =
     useState<MobileAssignmentComposerMode | null>(null);
   const [passOpen, setPassOpen] = useState(false);
-  const report = useGpaReport();
   const course = courses.find((item) => item.id === courseId);
 
   if (!course) {
@@ -2068,9 +2043,6 @@ function MobileCourseDetail({
 
   const metrics = calcMetrics(course);
   const sortedAssignments = course.assignments.slice().sort(assignmentSort);
-  const defaultCreditLabel = `Default ${formatCredits(
-    report.policy.defaultCreditWeight
-  )}`;
 
   return (
     <div className="min-h-[100dvh] space-y-4">
@@ -2111,6 +2083,27 @@ function MobileCourseDetail({
 
       {!assignmentComposerMode && (
         <MobileCourseProgressPanel course={course} metrics={metrics} />
+      )}
+
+      {!assignmentComposerMode && (
+        <button
+          type="button"
+          className="mobile-glow-action flex min-h-[68px] w-full items-center gap-3 rounded-[1.55rem] px-4 py-3 text-left active:scale-[0.99]"
+          onClick={() => setPassOpen(true)}
+        >
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/20 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.24)]">
+            <Target className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-black uppercase tracking-[0.16em] text-white/60">
+              Calculator
+            </span>
+            <span className="block truncate text-lg font-black tracking-tight text-white">
+              Need to pass?
+            </span>
+          </span>
+          <ChevronRight className="h-5 w-5 shrink-0 text-white/70" />
+        </button>
       )}
 
       <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
@@ -2207,121 +2200,6 @@ function MobileCourseDetail({
         </div>
         )}
       </section>
-
-      <section className="rounded-[2rem] border border-sky-100 bg-gradient-to-br from-slate-950 via-sky-950 to-emerald-900 p-5 text-white shadow-[0_24px_70px_-38px_rgba(14,165,233,0.9)]">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-white/55">
-              Calculator
-            </p>
-            <h2 className="mt-2 text-2xl font-black tracking-tight">
-              Need to pass?
-            </h2>
-            <p className="mt-2 text-base leading-relaxed text-white/65">
-              Pick upcoming work and see the average you need.
-            </p>
-          </div>
-          <Target className="h-7 w-7 text-white/50" />
-        </div>
-        <button
-          type="button"
-          className="pass-helper-button mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-black active:scale-[0.98]"
-          onClick={() => setPassOpen(true)}
-        >
-          <Target className="h-5 w-5" />
-          Open calculator
-        </button>
-      </section>
-
-      <details className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
-        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 rounded-2xl text-left">
-          <span>
-            <span className="block text-xs font-black uppercase tracking-wide text-slate-500">
-              Course setup
-            </span>
-            <span className="mt-1 block text-xl font-black tracking-tight">
-              Settings
-            </span>
-          </span>
-          <Settings className="h-5 w-5 text-slate-400" />
-        </summary>
-        <div className="mt-4 space-y-4">
-          <MobileField label="Semester">
-            <select
-              className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-900 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
-              value={course.folderId ?? ""}
-              onChange={(event) =>
-                moveCourseToFolder(course.id, event.target.value || null)
-              }
-            >
-              <option value="">Unfiled</option>
-              {folders.map((folder) => (
-                <option key={folder.id} value={folder.id}>
-                  {folderDisplayName(folder)}
-                </option>
-              ))}
-            </select>
-          </MobileField>
-          <div className="grid grid-cols-2 gap-3">
-            <MobileField label="Credit" hint={defaultCreditLabel}>
-              <input
-                className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-900 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
-                inputMode="decimal"
-                value={course.creditWeight ?? ""}
-                onChange={(event) => {
-                  const value = parseFlexibleNumber(event.target.value);
-                  updateCourse(course.id, {
-                    creditWeight:
-                      event.target.value === "" || value == null ? null : value,
-                  });
-                }}
-                placeholder={defaultCreditLabel}
-                aria-label={defaultCreditLabel}
-              />
-            </MobileField>
-            <MobileField label="GPA mode">
-              <select
-                className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 text-base font-semibold text-slate-900 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
-                value={course.gradeMode ?? "graded"}
-                onChange={(event) =>
-                  updateCourse(course.id, {
-                    gradeMode: event.target.value as GradeMode,
-                  })
-                }
-              >
-                {gradeModeOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </MobileField>
-          </div>
-          <label className="flex min-h-12 items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 text-base font-bold text-slate-700">
-            Count in GPA
-            <input
-              className="h-5 w-5 accent-slate-950"
-              type="checkbox"
-              checked={course.includeInGpa ?? true}
-              onChange={(event) =>
-                updateCourse(course.id, { includeInGpa: event.target.checked })
-              }
-            />
-          </label>
-        </div>
-      </details>
-
-      <button
-        type="button"
-        className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 text-base font-bold text-rose-700 active:scale-[0.98]"
-        onClick={() => {
-          removeCourse(course.id);
-          onBack();
-        }}
-      >
-        <Trash2 className="h-5 w-5" />
-        Delete course
-      </button>
 
       <MobileAssignmentSheet
         open={assignmentSheet != null}
@@ -3095,6 +2973,133 @@ function MobileSemesterSheet({
   );
 }
 
+function MobileCourseSetupSheet({
+  open,
+  onClose,
+  course,
+  defaultCreditLabel,
+}: {
+  open: boolean;
+  onClose: () => void;
+  course: Course | null;
+  defaultCreditLabel: string;
+}) {
+  const folders = useCourseStore((state) => state.folders);
+  const moveCourseToFolder = useCourseStore((state) => state.moveCourseToFolder);
+  const updateCourse = useCourseStore((state) => state.updateCourse);
+  const removeCourse = useCourseStore((state) => state.removeCourse);
+  const folderName =
+    course?.folderId == null
+      ? "Unfiled"
+      : folderDisplayName(
+          folders.find((folder) => folder.id === course.folderId) ?? {
+            id: course.folderId,
+            name: "Semester",
+            year: "",
+            color: "#64748b",
+          }
+        );
+
+  return (
+    <MobileBottomSheet
+      title="Course setup"
+      open={open && course != null}
+      onClose={onClose}
+    >
+      {course && (
+        <div className="space-y-3">
+          <div className="rounded-[1.5rem] border border-white/70 bg-slate-950 p-4 text-white shadow-soft">
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-white/55">
+              Editing
+            </p>
+            <h3 className="mt-1 truncate text-2xl font-black tracking-tight">
+              {course.name}
+            </h3>
+            <p className="mt-1 text-sm font-semibold text-white/60">{folderName}</p>
+          </div>
+
+          <MobileField label="Semester">
+            <select
+              className="min-h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-900 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+              value={course.folderId ?? ""}
+              onChange={(event) =>
+                moveCourseToFolder(course.id, event.target.value || null)
+              }
+            >
+              <option value="">Unfiled</option>
+              {folders.map((folder) => (
+                <option key={folder.id} value={folder.id}>
+                  {folderDisplayName(folder)}
+                </option>
+              ))}
+            </select>
+          </MobileField>
+
+          <div className="grid grid-cols-2 gap-3">
+            <MobileField label="Credit" hint={defaultCreditLabel}>
+              <input
+                className="min-h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-900 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+                inputMode="decimal"
+                value={course.creditWeight ?? ""}
+                onChange={(event) => {
+                  const value = parseFlexibleNumber(event.target.value);
+                  updateCourse(course.id, {
+                    creditWeight:
+                      event.target.value === "" || value == null ? null : value,
+                  });
+                }}
+                placeholder={defaultCreditLabel}
+                aria-label={defaultCreditLabel}
+              />
+            </MobileField>
+            <MobileField label="GPA mode">
+              <select
+                className="min-h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-base font-semibold text-slate-900 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+                value={course.gradeMode ?? "graded"}
+                onChange={(event) =>
+                  updateCourse(course.id, {
+                    gradeMode: event.target.value as GradeMode,
+                  })
+                }
+              >
+                {gradeModeOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </MobileField>
+          </div>
+
+          <label className="flex min-h-11 items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 text-base font-bold text-slate-700">
+            Count in GPA
+            <input
+              className="h-5 w-5 accent-slate-950"
+              type="checkbox"
+              checked={course.includeInGpa ?? true}
+              onChange={(event) =>
+                updateCourse(course.id, { includeInGpa: event.target.checked })
+              }
+            />
+          </label>
+
+          <button
+            type="button"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 text-base font-bold text-rose-700 active:scale-[0.98]"
+            onClick={() => {
+              removeCourse(course.id);
+              onClose();
+            }}
+          >
+            <Trash2 className="h-5 w-5" />
+            Delete course
+          </button>
+        </div>
+      )}
+    </MobileBottomSheet>
+  );
+}
+
 function MobileSettings() {
   const appMode = useCourseStore((state) => state.appMode ?? "custom");
   const setAppMode = useCourseStore((state) => state.setAppMode);
@@ -3104,8 +3109,24 @@ function MobileSettings() {
   const setUniversityTheme = useCourseStore((state) => state.setUniversityTheme);
   const customThemeId = useCourseStore((state) => state.customThemeId ?? "classic");
   const setCustomTheme = useCourseStore((state) => state.setCustomTheme);
+  const courses = useCourseStore((state) => state.courses);
   const folders = useCourseStore((state) => state.folders);
   const [semesterSheet, setSemesterSheet] = useState<CourseFolder | null | "new">(null);
+  const [courseSetupId, setCourseSetupId] = useState<string | null>(null);
+  const report = useGpaReport();
+  const foldersById = useMemo(
+    () => new Map(folders.map((folder) => [folder.id, folder])),
+    [folders]
+  );
+  const sortedCourses = useMemo(
+    () => courses.slice().sort((a, b) => courseSort(a, b, foldersById)),
+    [courses, foldersById]
+  );
+  const selectedCourse =
+    sortedCourses.find((course) => course.id === courseSetupId) ?? null;
+  const defaultCreditLabel = `Default ${formatCredits(
+    report.policy.defaultCreditWeight
+  )}`;
 
   return (
     <div className="space-y-4">
@@ -3135,6 +3156,55 @@ function MobileSettings() {
               </button>
             );
           })}
+        </div>
+      </section>
+
+      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+              Course setup
+            </p>
+            <h2 className="text-xl font-black tracking-tight">Edit courses</h2>
+          </div>
+          <Settings className="h-5 w-5 text-slate-400" />
+        </div>
+        <div className="mt-4 max-h-[22rem] space-y-2 overflow-y-auto overscroll-contain pr-1">
+          {sortedCourses.map((course) => {
+            const folder = course.folderId ? foldersById.get(course.folderId) : null;
+            return (
+              <button
+                key={course.id}
+                type="button"
+                className="flex min-h-[58px] w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-left active:scale-[0.99]"
+                onClick={() => setCourseSetupId(course.id)}
+              >
+                <span
+                  className="h-9 w-1.5 shrink-0 rounded-full"
+                  style={{
+                    backgroundColor: folder?.color ?? "var(--theme-primary)",
+                  }}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-base font-black text-slate-950">
+                    {course.name}
+                  </span>
+                  <span className="block truncate text-sm font-semibold text-slate-500">
+                    {folder ? folderDisplayName(folder) : "Unfiled"} /{" "}
+                    {formatCredits(
+                      course.creditWeight ?? report.policy.defaultCreditWeight
+                    )}
+                  </span>
+                </span>
+                <Edit3 className="h-4 w-4 shrink-0 text-slate-400" />
+              </button>
+            );
+          })}
+          {sortedCourses.length === 0 && (
+            <p className="rounded-3xl border border-dashed border-slate-300 px-5 py-6 text-center text-base font-semibold text-slate-500">
+              Add a course first, then its setup will live here.
+            </p>
+          )}
         </div>
       </section>
 
@@ -3268,6 +3338,12 @@ function MobileSettings() {
         onClose={() => setSemesterSheet(null)}
         folder={semesterSheet === "new" ? null : semesterSheet}
       />
+      <MobileCourseSetupSheet
+        open={selectedCourse != null}
+        onClose={() => setCourseSetupId(null)}
+        course={selectedCourse}
+        defaultCreditLabel={defaultCreditLabel}
+      />
     </div>
   );
 }
@@ -3355,8 +3431,7 @@ export default function MobileApp() {
           <header className="sticky top-0 z-20 -mx-5 mb-4 border-b border-white/70 bg-white/86 px-5 pb-3 pt-[calc(env(safe-area-inset-top)+0.6rem)] shadow-[0_16px_42px_-34px_rgba(15,23,42,0.5)] backdrop-blur">
             <div className="flex items-center gap-3">
               <MobileSchoolMark
-                image={appMode === "university" ? activeTheme.backgroundImage : ""}
-                themeId={activeTheme.id}
+                themeId={appMode === "university" ? activeTheme.id : "markmate"}
                 label={activeTheme.label}
               />
               <div className="min-w-0 flex-1">
