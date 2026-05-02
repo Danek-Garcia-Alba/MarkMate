@@ -836,14 +836,25 @@ textarea {
   position: relative;
   overflow: hidden;
   color: white;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--theme-primary) 88%, #020617), color-mix(in srgb, var(--theme-accent) 42%, var(--theme-primary))),
-    var(--theme-primary);
-  border: 1px solid color-mix(in srgb, var(--theme-accent) 28%, rgba(255, 255, 255, 0.42));
+  background-color: var(--theme-primary, #0f172a);
+  background-image: linear-gradient(
+    135deg,
+    var(--theme-primary, #0f172a),
+    var(--theme-accent, #0ea5e9)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.42);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.24),
-    0 18px 46px -32px color-mix(in srgb, var(--theme-primary) 72%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--theme-accent) 10%, transparent);
+    0 18px 46px -32px rgba(15, 23, 42, 0.72),
+    0 0 0 1px rgba(255, 255, 255, 0.14);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--theme-primary, #0f172a) 88%, #020617), color-mix(in srgb, var(--theme-accent, #0ea5e9) 42%, var(--theme-primary, #0f172a))),
+    var(--theme-primary, #0f172a);
+  border: 1px solid color-mix(in srgb, var(--theme-accent, #0ea5e9) 28%, rgba(255, 255, 255, 0.42));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 18px 46px -32px color-mix(in srgb, var(--theme-primary, #0f172a) 72%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--theme-accent, #0ea5e9) 10%, transparent);
 }
 
 .mobile-glow-action::after {

@@ -1954,9 +1954,11 @@ function MobileCourseCreateSheet({
             onBlur={settleMobileInputAfterBlur}
           />
         </MobileField>
-        <MobileField label="Semester">
-          <div className="space-y-3">
+        <div className="block text-base font-bold text-slate-700">
+          <label htmlFor="mobile-course-semester">Semester</label>
+          <div className="mt-2 space-y-3">
             <select
+              id="mobile-course-semester"
               ref={folderSelectRef}
               className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
               value={folderId ?? ""}
@@ -1971,14 +1973,15 @@ function MobileCourseCreateSheet({
             </select>
             <button
               type="button"
-              className="mobile-glow-action inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-black active:scale-[0.98]"
+              className="mobile-glow-action flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-black active:scale-[0.98]"
+              data-mobile-add-course-submit="true"
               {...submitTouchProps}
             >
               <Check className="h-5 w-5" />
               Add course
             </button>
           </div>
-        </MobileField>
+        </div>
       </div>
     </MobileBottomSheet>
   );
