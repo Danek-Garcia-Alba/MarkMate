@@ -894,6 +894,95 @@ textarea {
   z-index: 1;
 }
 
+.mobile-smart-widget {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, #37aee2 0%, #30b987 48%, #d7a43a 100%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.14));
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.22),
+    0 18px 42px -28px rgba(14, 165, 233, 0.9),
+    0 22px 46px -32px rgba(34, 197, 94, 0.76);
+  transform: translateZ(0);
+}
+
+.mobile-smart-widget::before,
+.mobile-smart-widget::after {
+  position: absolute;
+  content: "";
+  pointer-events: none;
+  z-index: 0;
+}
+
+.mobile-smart-widget::before {
+  inset: 1px;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.34), transparent 38%),
+    radial-gradient(circle at 92% 112%, rgba(255, 255, 255, 0.2), transparent 42%),
+    linear-gradient(135deg, rgba(14, 165, 233, 0.9), rgba(34, 197, 94, 0.86) 52%, rgba(217, 119, 6, 0.82));
+}
+
+.mobile-smart-widget::after {
+  inset: -70% -34%;
+  background: linear-gradient(
+    108deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.22) 47%,
+    rgba(255, 255, 255, 0.08) 51%,
+    transparent 60%
+  );
+  mix-blend-mode: screen;
+  transform: translate3d(-34%, 0, 0) rotate(8deg);
+  animation: mobile-widget-gloss 3.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.mobile-smart-widget-button {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04)),
+    radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.24), transparent 42%),
+    radial-gradient(circle at 100% 100%, rgba(2, 6, 23, 0.1), transparent 44%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(18px) saturate(1.12);
+  touch-action: pan-y;
+  transition:
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    background 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mobile-smart-widget-button:active {
+  transform: scale(0.992);
+}
+
+.mobile-widget-icon {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.14)),
+    rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 12px 30px -22px rgba(15, 23, 42, 0.64);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+}
+
+.mobile-widget-copy {
+  will-change: transform, opacity;
+}
+
+.mobile-widget-copy-next {
+  animation: mobile-widget-next 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.mobile-widget-copy-previous {
+  animation: mobile-widget-previous 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 .pass-helper-button:hover {
   filter: brightness(1.04);
 }
@@ -972,6 +1061,52 @@ textarea {
   92% {
     transform: translateX(42%);
     opacity: 0;
+  }
+}
+
+@keyframes mobile-widget-gloss {
+  0%,
+  58%,
+  100% {
+    opacity: 0;
+    transform: translate3d(-34%, 0, 0) rotate(8deg);
+  }
+  70% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 0;
+    transform: translate3d(34%, 0, 0) rotate(8deg);
+  }
+}
+
+@keyframes mobile-widget-next {
+  from {
+    opacity: 0;
+    transform: translate3d(14px, 0, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes mobile-widget-previous {
+  from {
+    opacity: 0;
+    transform: translate3d(-14px, 0, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-smart-widget::after,
+  .mobile-widget-copy-next,
+  .mobile-widget-copy-previous {
+    animation: none;
   }
 }
 

@@ -1466,6 +1466,11 @@ function MobileHomeCommandPanel({
     appMode === "university" ? report.policy.shortName : "MarkMate";
   const needsCustomSetup = appMode === "custom" && folderCount === 0;
   const [widgetIndex, setWidgetIndex] = useState(0);
+  const [widgetDirection, setWidgetDirection] = useState<"next" | "previous">(
+    "next"
+  );
+  const widgetTouchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const suppressWidgetClickRef = useRef(false);
   const recentCourse = recentCourses[0];
   const recentMetrics = recentCourse ? calcMetrics(recentCourse) : null;
   const widgets = useMemo(() => {
@@ -1482,7 +1487,6 @@ function MobileHomeCommandPanel({
         : needsCustomSetup
         ? "Build your own year and semester setup."
         : "Name the class, then add assignments inside it.",
-      icon: CalendarDays,
       onClick: () =>
         nextAssignment
           ? onOpenCourse(nextAssignment.course.id)
@@ -1498,7 +1502,6 @@ function MobileHomeCommandPanel({
           detail: `${folderLabel(recentCourse, folders)} / ${formatPercent(
             recentMetrics?.gradeSoFar ?? 0
           )}`,
-          icon: BookOpen,
           onClick: () => onOpenCourse(recentCourse.id),
         }
       : null;
@@ -1509,7 +1512,6 @@ function MobileHomeCommandPanel({
       detail: `${report.cumulative.includedCourses.length} included / ${gpaWaitingCourseCount(
         report
       )} waiting`,
-      icon: Gauge,
       onClick: onOpenGpa,
     };
 
@@ -1522,7 +1524,6 @@ function MobileHomeCommandPanel({
         label: string;
         title: string;
         detail: string;
-        icon: typeof CalendarDays;
         onClick: () => void;
       }>;
   }, [
@@ -1538,16 +1539,58 @@ function MobileHomeCommandPanel({
     report,
   ]);
 
+  const moveWidget = (direction: "next" | "previous") => {
+    if (widgets.length <= 1) return;
+    setWidgetDirection(direction);
+    setWidgetIndex((current) =>
+      direction === "next"
+        ? (current + 1) % widgets.length
+        : (current - 1 + widgets.length) % widgets.length
+    );
+  };
+
   useEffect(() => {
     if (widgets.length <= 1) return;
     const id = window.setInterval(() => {
+      setWidgetDirection("next");
       setWidgetIndex((current) => (current + 1) % widgets.length);
-    }, 5200);
+    }, 3600);
     return () => window.clearInterval(id);
   }, [widgets.length]);
 
   const activeWidget = widgets[widgetIndex % widgets.length] ?? widgets[0];
-  const ActiveIcon = activeWidget?.icon ?? CalendarDays;
+  const handleWidgetTouchStart = (event: React.TouchEvent<HTMLButtonElement>) => {
+    const point = swipeTouchPoint(event, "touches");
+    if (!point) return;
+    widgetTouchStartRef.current = point;
+  };
+  const handleWidgetTouchMove = (event: React.TouchEvent<HTMLButtonElement>) => {
+    const start = widgetTouchStartRef.current;
+    const point = swipeTouchPoint(event, "touches");
+    if (!start || !point) return;
+    const dx = point.x - start.x;
+    const dy = point.y - start.y;
+    if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+      suppressWidgetClickRef.current = true;
+      if (event.cancelable) event.preventDefault();
+    }
+  };
+  const handleWidgetTouchEnd = (event: React.TouchEvent<HTMLButtonElement>) => {
+    const start = widgetTouchStartRef.current;
+    widgetTouchStartRef.current = null;
+    if (!start) return;
+    const point = swipeTouchPoint(event, "changedTouches");
+    if (!point) return;
+    const dx = point.x - start.x;
+    const dy = point.y - start.y;
+    if (Math.abs(dx) > 42 && Math.abs(dx) > Math.abs(dy) * 1.25) {
+      suppressWidgetClickRef.current = true;
+      moveWidget(dx < 0 ? "next" : "previous");
+      window.setTimeout(() => {
+        suppressWidgetClickRef.current = false;
+      }, 220);
+    }
+  };
 
   return (
     <section className="rounded-[1.75rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
@@ -1574,45 +1617,44 @@ function MobileHomeCommandPanel({
       </div>
 
       {activeWidget && (
-        <div className="mt-3 rounded-[1.35rem] border border-slate-950/10 bg-slate-950 p-2 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]">
+        <div className="mobile-smart-widget mt-3 rounded-[1.45rem] p-[1px] text-white">
           <button
+            key={activeWidget.key}
             type="button"
-            className="flex min-h-[66px] w-full items-center gap-3 rounded-[1.05rem] bg-white/8 px-3 py-2 text-left active:scale-[0.99]"
-            onClick={activeWidget.onClick}
+            className="mobile-smart-widget-button flex min-h-[76px] w-full items-center gap-3 rounded-[1.35rem] px-3.5 py-3 text-left"
+            onClick={() => {
+              if (suppressWidgetClickRef.current) {
+                suppressWidgetClickRef.current = false;
+                return;
+              }
+              activeWidget.onClick();
+            }}
+            onTouchStart={handleWidgetTouchStart}
+            onTouchMove={handleWidgetTouchMove}
+            onTouchEnd={handleWidgetTouchEnd}
+            onTouchCancel={() => {
+              widgetTouchStartRef.current = null;
+            }}
           >
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/12">
-              <ActiveIcon className="h-5 w-5 text-white/74" />
+            <span
+              className={`mobile-widget-copy mobile-widget-copy-${widgetDirection} flex min-w-0 flex-1 items-center gap-3`}
+            >
+              <span className="mobile-widget-icon grid h-11 w-11 shrink-0 place-items-center rounded-2xl">
+                <MarkMateLogo size="xs" className="scale-[1.08]" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[0.68rem] font-black uppercase tracking-wide text-white/70">
+                  {activeWidget.label}
+                </span>
+                <span className="mt-0.5 block truncate text-[1.45rem] font-black leading-none tracking-tight text-white">
+                  {activeWidget.title}
+                </span>
+                <span className="mt-0.5 block truncate text-xs font-bold text-white/78">
+                  {activeWidget.detail}
+                </span>
+              </span>
             </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[0.68rem] font-black uppercase tracking-wide text-white/48">
-                {activeWidget.label}
-              </span>
-              <span className="mt-0.5 block truncate text-lg font-black">
-                {activeWidget.title}
-              </span>
-              <span className="mt-0.5 block truncate text-xs font-semibold text-white/58">
-                {activeWidget.detail}
-              </span>
-            </span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-white/50" />
           </button>
-          {widgets.length > 1 && (
-            <div className="mt-2 flex justify-center gap-1.5">
-              {widgets.map((widget, index) => (
-                <button
-                  key={widget.key}
-                  type="button"
-                  className={`h-1.5 rounded-full transition-all ${
-                    index === widgetIndex % widgets.length
-                      ? "w-5 bg-white"
-                      : "w-1.5 bg-white/28"
-                  }`}
-                  onClick={() => setWidgetIndex(index)}
-                  aria-label={`Show ${widget.label}`}
-                />
-              ))}
-            </div>
-          )}
         </div>
       )}
 
