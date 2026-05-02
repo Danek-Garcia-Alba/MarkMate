@@ -1936,15 +1936,6 @@ function MobileCourseCreateSheet({
       title="New course"
       open={open}
       onClose={onClose}
-      action={
-        <button
-          type="button"
-          className="mobile-glow-action inline-flex min-h-11 items-center justify-center rounded-full px-5 text-sm font-black shadow-[0_16px_34px_-20px_var(--theme-primary)] active:scale-[0.98]"
-          {...submitTouchProps}
-        >
-          Done
-        </button>
-      }
     >
       <div className="space-y-3 pb-1">
         <div className="rounded-[1.35rem] bg-slate-950 px-4 py-3 text-white">
@@ -1980,10 +1971,10 @@ function MobileCourseCreateSheet({
         </MobileField>
         <button
           type="button"
-          className="mobile-glow-action sticky bottom-[calc(env(safe-area-inset-bottom)+0.35rem)] z-10 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-bold shadow-[0_20px_42px_-22px_var(--theme-primary)] active:scale-[0.98]"
+          className="mobile-glow-action inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-black active:scale-[0.98]"
           {...submitTouchProps}
         >
-          <Plus className="h-5 w-5" />
+          <Check className="h-5 w-5" />
           Add course
         </button>
       </div>
