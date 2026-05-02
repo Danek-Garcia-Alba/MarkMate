@@ -121,6 +121,11 @@ const semesterColors = [
   "#52525b",
 ] as const;
 
+function campusBubblePosition(themeId: string) {
+  if (themeId === "uoft") return "78% 44%";
+  return "76% center";
+}
+
 function useGpaReport() {
   const courses = useCourseStore((state) => state.courses);
   const folders = useCourseStore((state) => state.folders);
@@ -359,7 +364,8 @@ function MobileProgressRing({
   color?: string;
   tone?: "neutral" | "good" | "warn" | "bad";
 }) {
-  const radius = 34;
+  const size = 64;
+  const radius = 24;
   const circumference = 2 * Math.PI * radius;
   const progress = clampPercent(value ?? 0);
   const ringColor =
@@ -372,42 +378,45 @@ function MobileProgressRing({
       : color;
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-3">
-      <div className="flex items-center gap-3">
-        <div className="relative grid h-[84px] w-[84px] shrink-0 place-items-center">
-          <svg className="-rotate-90" width="84" height="84" viewBox="0 0 84 84">
+    <div
+      className="rounded-2xl border border-slate-200 bg-white px-2 py-3 text-center"
+      title={detail}
+    >
+      <div className="mx-auto grid justify-items-center gap-2">
+        <div className="relative grid h-16 w-16 shrink-0 place-items-center">
+          <svg
+            className="-rotate-90"
+            width={size}
+            height={size}
+            viewBox={`0 0 ${size} ${size}`}
+          >
             <circle
-              cx="42"
-              cy="42"
+              cx={size / 2}
+              cy={size / 2}
               r={radius}
               fill="none"
               stroke="#e2e8f0"
-              strokeWidth="8"
+              strokeWidth="7"
             />
             <circle
-              cx="42"
-              cy="42"
+              cx={size / 2}
+              cy={size / 2}
               r={radius}
               fill="none"
               stroke={ringColor}
               strokeLinecap="round"
-              strokeWidth="8"
+              strokeWidth="7"
               strokeDasharray={circumference}
               strokeDashoffset={circumference - (progress / 100) * circumference}
             />
           </svg>
-          <span className="absolute text-lg font-black tabular-nums text-slate-950">
+          <span className="absolute text-sm font-black tabular-nums text-slate-950">
             {value == null ? "--" : `${Math.round(value)}%`}
           </span>
         </div>
-        <div className="min-w-0">
-          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-            {label}
-          </p>
-          <p className="mt-1 text-base font-black leading-snug text-slate-950">
-            {detail}
-          </p>
-        </div>
+        <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+          {label}
+        </p>
       </div>
     </div>
   );
@@ -427,17 +436,15 @@ function MobileCourseProgressPanel({
 
   return (
     <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
-      <div className="mb-4 flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-wide text-slate-500">
             Course progress
           </p>
-          <h2 className="mt-1 text-xl font-black tracking-tight">
-            Rings and weights
-          </h2>
+          <h2 className="mt-1 text-xl font-black tracking-tight">Snapshot</h2>
         </div>
         <span
-          className={`rounded-full px-3 py-1 text-xs font-black ${
+          className={`max-w-[9.5rem] rounded-full px-3 py-1 text-right text-xs font-black leading-tight ${
             weightStatus.tone === "good"
               ? "bg-emerald-50 text-emerald-700"
               : weightStatus.tone === "bad"
@@ -448,15 +455,15 @@ function MobileCourseProgressPanel({
           {weightStatus.label}
         </span>
       </div>
-      <div className="grid gap-3">
+      <div className="mt-4 grid grid-cols-3 gap-2">
         <MobileProgressRing
-          label="Current"
+          label="Grade"
           value={metrics.gradeSoFar}
           detail="Grade so far"
           color={course.color ?? "var(--theme-primary)"}
         />
         <MobileProgressRing
-          label="Completed"
+          label="Done"
           value={metrics.displayCompleted}
           detail={`${completeAssignments}/${course.assignments.length} assignments done`}
           color={course.color ?? "var(--theme-primary)"}
@@ -468,6 +475,9 @@ function MobileCourseProgressPanel({
           tone={weightStatus.tone}
         />
       </div>
+      <p className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-bold leading-snug text-slate-600">
+        {weightStatus.detail}. {completeAssignments}/{course.assignments.length} assignments complete.
+      </p>
     </section>
   );
 }
@@ -565,13 +575,9 @@ function EmptyCourses({ onAddCourse }: { onAddCourse: () => void }) {
 function MobileIdentityCard({
   courseCount,
   semesterCount,
-  onGoCourses,
-  onGoCalendar,
 }: {
   courseCount: number;
   semesterCount: number;
-  onGoCourses: () => void;
-  onGoCalendar: () => void;
 }) {
   const appMode = useCourseStore((state) => state.appMode ?? "custom");
   const setAppMode = useCourseStore((state) => state.setAppMode);
@@ -586,12 +592,15 @@ function MobileIdentityCard({
     customThemeId
   );
   const imageLayer = activeTheme.backgroundImage
-    ? `linear-gradient(90deg, rgba(15,23,42,0.86), rgba(15,23,42,0.46)), url(${activeTheme.backgroundImage})`
+    ? `linear-gradient(90deg, rgba(15,23,42,0.92), rgba(15,23,42,0.62)), url(${activeTheme.backgroundImage})`
     : `linear-gradient(135deg, color-mix(in srgb, ${brandPalette.logoPrimary} 34%, #020617), #0f172a 58%, color-mix(in srgb, ${brandPalette.logoAccent} 28%, #1e293b))`;
+  const campusBubbleLayer = activeTheme.backgroundImage
+    ? `linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.24)), url(${activeTheme.backgroundImage})`
+    : `radial-gradient(circle at 25% 20%, ${brandPalette.logoAccent}, transparent 48%), linear-gradient(135deg, ${brandPalette.logoPrimary}, #0f172a)`;
 
   return (
     <section
-      className="relative overflow-hidden rounded-[2rem] border border-white/70 bg-slate-950 p-4 text-white shadow-[0_24px_64px_-36px_rgba(15,23,42,0.72)]"
+      className="relative overflow-hidden rounded-[1.75rem] border border-white/70 bg-slate-950 p-3 text-white shadow-[0_20px_56px_-36px_rgba(15,23,42,0.72)]"
       style={{
         backgroundImage: imageLayer,
         backgroundPosition: activeTheme.position ?? "center",
@@ -600,58 +609,150 @@ function MobileIdentityCard({
     >
       <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.12),transparent_52%,rgba(2,6,23,0.28))]" />
       <div className="relative">
-        <div className="flex items-start gap-4">
-          <MarkMateLogo size="lg" className="ring-white/35" />
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-white/60">
-              MarkMate
-            </p>
-            <h1 className="mt-1 truncate text-2xl font-black tracking-tight">
-              {activeTheme.label}
-            </h1>
-            <p className="mt-1 text-sm font-semibold leading-snug text-white/70">
+        <div className="grid grid-cols-[1fr_7rem] gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3">
+              <MarkMateLogo size="sm" className="ring-white/35" />
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-white/60">
+                  MarkMate
+                </p>
+                <h1 className="truncate text-2xl font-black tracking-tight">
+                  {activeTheme.label}
+                </h1>
+              </div>
+            </div>
+            <p className="mt-3 text-sm font-bold leading-snug text-white/70">
               {courseCount} courses / {semesterCount} semesters
             </p>
+            <div className="mt-3 grid grid-cols-2 gap-1 rounded-2xl border border-white/20 bg-white/10 p-1 backdrop-blur">
+              {[
+                { id: "custom", label: "Custom" },
+                { id: "university", label: "School" },
+              ].map((option) => {
+                const active = appMode === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={`min-h-9 rounded-xl text-xs font-black active:scale-[0.98] ${
+                      active ? "bg-white text-slate-950" : "text-white/70"
+                    }`}
+                    onClick={() => setAppMode(option.id as "custom" | "university")}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div
+            className="min-h-32 rounded-[1.45rem] border border-white/20 bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]"
+            style={{
+              backgroundImage: campusBubbleLayer,
+              backgroundPosition: activeTheme.backgroundImage
+                ? campusBubblePosition(activeTheme.id)
+                : "center",
+              backgroundSize: "cover",
+            }}
+            aria-hidden="true"
+          >
+            <div className="h-full rounded-[1.45rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(2,6,23,0.22))]" />
           </div>
         </div>
+      </div>
+    </section>
+  );
+}
 
-        <div className="mt-5 grid grid-cols-2 gap-2 rounded-3xl border border-white/20 bg-white/10 p-1.5 backdrop-blur">
-          {[
-            { id: "custom", label: "Custom" },
-            { id: "university", label: "University" },
-          ].map((option) => {
-            const active = appMode === option.id;
-            return (
-              <button
-                key={option.id}
-                type="button"
-                className={`min-h-11 rounded-2xl text-sm font-black active:scale-[0.98] ${
-                  active ? "bg-white text-slate-950" : "text-white/70"
-                }`}
-                onClick={() => setAppMode(option.id as "custom" | "university")}
-              >
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
+function MobileHomeCommandPanel({
+  report,
+  nextAssignment,
+  onAddCourse,
+  onGoCalendar,
+  onOpenGpa,
+  onOpenCourse,
+}: {
+  report: UniversityGpaReport;
+  nextAssignment?: { course: Course; assignment: Assignment };
+  onAddCourse: () => void;
+  onGoCalendar: () => void;
+  onOpenGpa: () => void;
+  onOpenCourse: (courseId: string) => void;
+}) {
+  const appMode = useCourseStore((state) => state.appMode ?? "custom");
+  const primaryLabel =
+    appMode === "university" ? report.policy.shortName : "MarkMate";
 
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            className="min-h-11 rounded-2xl border border-white/20 bg-white/10 px-3 text-sm font-black text-white backdrop-blur active:scale-[0.98]"
-            onClick={onGoCourses}
-          >
-            Courses
-          </button>
-          <button
-            type="button"
-            className="min-h-11 rounded-2xl border border-white/20 bg-white/10 px-3 text-sm font-black text-white backdrop-blur active:scale-[0.98]"
-            onClick={onGoCalendar}
-          >
-            Calendar
-          </button>
+  return (
+    <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+            Today
+          </p>
+          <div className="mt-1 text-4xl font-black tracking-tight text-slate-950">
+            {formatSchoolAverage(report)}
+          </div>
+          <p className="mt-1 text-sm font-black uppercase tracking-[0.16em] text-slate-400">
+            {primaryLabel}
+          </p>
         </div>
+        <button
+          type="button"
+          className="grid min-h-11 min-w-11 place-items-center rounded-2xl border border-slate-200 bg-white text-slate-600 active:scale-[0.98]"
+          onClick={onOpenGpa}
+          aria-label="Open GPA details"
+        >
+          <CircleHelp className="h-5 w-5" />
+        </button>
+      </div>
+
+      <button
+        type="button"
+        className="mt-4 flex min-h-[76px] w-full items-center gap-3 rounded-2xl bg-slate-950 px-4 py-3 text-left text-white active:scale-[0.99]"
+        onClick={() =>
+          nextAssignment ? onOpenCourse(nextAssignment.course.id) : onAddCourse()
+        }
+      >
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/12">
+          <CalendarDays className="h-5 w-5 text-white/70" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-xs font-black uppercase tracking-wide text-white/50">
+            {nextAssignment ? "Next up" : "Start here"}
+          </span>
+          <span className="mt-0.5 block truncate text-xl font-black">
+            {nextAssignment?.assignment.title || "Add a course"}
+          </span>
+          <span className="mt-0.5 block truncate text-sm font-semibold text-white/58">
+            {nextAssignment
+              ? `${nextAssignment.course.name} / ${formatShortDate(
+                  nextAssignment.assignment.dueDate
+                )}`
+              : "Name it once, then add assignments inside it."}
+          </span>
+        </span>
+        <ChevronRight className="h-5 w-5 shrink-0 text-white/50" />
+      </button>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-3 text-base font-black text-white active:scale-[0.98]"
+          onClick={onAddCourse}
+        >
+          <Plus className="h-5 w-5" />
+          New course
+        </button>
+        <button
+          type="button"
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-base font-black text-slate-700 active:scale-[0.98]"
+          onClick={onGoCalendar}
+        >
+          <CalendarDays className="h-5 w-5" />
+          Calendar
+        </button>
       </div>
     </section>
   );
@@ -703,66 +804,18 @@ function MobileDashboard({
       <MobileIdentityCard
         courseCount={courses.length}
         semesterCount={folders.length}
-        onGoCourses={onGoCourses}
-        onGoCalendar={onGoCalendar}
       />
-      <MobileGpaHero report={report} onOpenGpa={onOpenGpa} />
+      <MobileHomeCommandPanel
+        report={report}
+        nextAssignment={nextAssignment}
+        onAddCourse={onAddCourse}
+        onGoCalendar={onGoCalendar}
+        onOpenGpa={onOpenGpa}
+        onOpenCourse={onOpenCourse}
+      />
 
-      <div className="grid grid-cols-3 gap-2">
-        <button
-          type="button"
-          className="min-h-12 rounded-2xl bg-slate-950 px-3 text-sm font-black text-white active:scale-[0.98]"
-          onClick={onAddCourse}
-        >
-          Add class
-        </button>
-        <button
-          type="button"
-          className="min-h-12 rounded-2xl border border-slate-200 bg-white/95 px-3 text-sm font-black text-slate-700 active:scale-[0.98]"
-          onClick={onGoCalendar}
-        >
-          Calendar
-        </button>
-        <button
-          type="button"
-          className="min-h-12 rounded-2xl border border-slate-200 bg-white/95 px-3 text-sm font-black text-slate-700 active:scale-[0.98]"
-          onClick={onOpenGpa}
-        >
-          GPA
-        </button>
-      </div>
-
-      {courses.length === 0 ? (
-        <EmptyCourses onAddCourse={onAddCourse} />
-      ) : (
+      {courses.length > 0 && (
         <>
-          <button
-            type="button"
-            className="w-full rounded-[1.75rem] bg-slate-950 p-5 text-left text-white shadow-[0_22px_60px_-38px_rgba(15,23,42,0.75)] active:scale-[0.99]"
-            onClick={() =>
-              nextAssignment ? onOpenCourse(nextAssignment.course.id) : onGoCalendar()
-            }
-          >
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-xs font-black uppercase tracking-wide text-white/55">
-                  Next up
-                </p>
-                <h2 className="mt-1 text-2xl font-black tracking-tight">
-                  {nextAssignment?.assignment.title || "No urgent tasks"}
-                </h2>
-              </div>
-              <CalendarDays className="h-6 w-6 text-white/50" />
-            </div>
-            <p className="mt-3 text-base leading-relaxed text-white/64">
-              {nextAssignment
-                ? `${nextAssignment.course.name} / ${formatShortDate(
-                    nextAssignment.assignment.dueDate
-                  )}`
-                : "Add deadlines from any course or the calendar tab."}
-            </p>
-          </button>
-
           <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
             <div className="mb-3 flex items-center justify-between gap-4">
               <div>
@@ -943,6 +996,22 @@ function MobileCourses({
             <Plus className="h-5 w-5" />
           </button>
         </div>
+        <button
+          type="button"
+          className="mt-4 flex min-h-[70px] w-full items-center gap-3 rounded-2xl bg-slate-950 px-4 py-3 text-left text-white active:scale-[0.99]"
+          onClick={onAddCourse}
+        >
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white/12">
+            <Plus className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-base font-black">New course</span>
+            <span className="mt-0.5 block text-sm font-semibold text-white/58">
+              Add the class first. It opens right after.
+            </span>
+          </span>
+          <ChevronRight className="h-5 w-5 shrink-0 text-white/50" />
+        </button>
         <label className="relative mt-4 block">
           <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
           <input
@@ -1023,8 +1092,14 @@ function MobileCourseCreateSheet({
   };
 
   return (
-    <MobileBottomSheet title="Add course" open={open} onClose={onClose}>
+    <MobileBottomSheet title="New course" open={open} onClose={onClose}>
       <div className="space-y-4">
+        <div className="rounded-3xl bg-slate-950 p-4 text-white">
+          <p className="text-base font-bold leading-relaxed text-white/72">
+            Create the course first. MarkMate opens it right away so assignments
+            are the next obvious step.
+          </p>
+        </div>
         <MobileField label="Course name" hint="Examples: CIV 344, BIO 130, Calculus">
           <input
             className="min-h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-base font-semibold text-slate-950 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
@@ -1425,81 +1500,6 @@ function MobileCourseDetail({
       <MobileCourseProgressPanel course={course} metrics={metrics} />
 
       <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-              Course setup
-            </p>
-            <h2 className="text-xl font-black tracking-tight">Settings</h2>
-          </div>
-          <Settings className="h-5 w-5 text-slate-400" />
-        </div>
-        <div className="space-y-4">
-          <MobileField label="Semester">
-            <select
-              className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-900 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
-              value={course.folderId ?? ""}
-              onChange={(event) =>
-                moveCourseToFolder(course.id, event.target.value || null)
-              }
-            >
-              <option value="">Unfiled</option>
-              {folders.map((folder) => (
-                <option key={folder.id} value={folder.id}>
-                  {folderDisplayName(folder)}
-                </option>
-              ))}
-            </select>
-          </MobileField>
-          <div className="grid grid-cols-2 gap-3">
-            <MobileField label="Credit">
-              <input
-                className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-900 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
-                inputMode="decimal"
-                value={course.creditWeight ?? ""}
-                onChange={(event) => {
-                  const value = parseFlexibleNumber(event.target.value);
-                  updateCourse(course.id, {
-                    creditWeight:
-                      event.target.value === "" || value == null ? null : value,
-                  });
-                }}
-                placeholder="Default"
-              />
-            </MobileField>
-            <MobileField label="GPA mode">
-              <select
-                className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 text-base font-semibold text-slate-900 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
-                value={course.gradeMode ?? "graded"}
-                onChange={(event) =>
-                  updateCourse(course.id, {
-                    gradeMode: event.target.value as GradeMode,
-                  })
-                }
-              >
-                {gradeModeOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </MobileField>
-          </div>
-          <label className="flex min-h-12 items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 text-base font-bold text-slate-700">
-            Count in GPA
-            <input
-              className="h-5 w-5 accent-slate-950"
-              type="checkbox"
-              checked={course.includeInGpa ?? true}
-              onChange={(event) =>
-                updateCourse(course.id, { includeInGpa: event.target.checked })
-              }
-            />
-          </label>
-        </div>
-      </section>
-
-      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-xs font-black uppercase tracking-wide text-slate-500">
@@ -1593,6 +1593,83 @@ function MobileCourseDetail({
           Open calculator
         </button>
       </section>
+
+      <details className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-4 rounded-2xl text-left">
+          <span>
+            <span className="block text-xs font-black uppercase tracking-wide text-slate-500">
+              Course setup
+            </span>
+            <span className="mt-1 block text-xl font-black tracking-tight">
+              Settings
+            </span>
+          </span>
+          <Settings className="h-5 w-5 text-slate-400" />
+        </summary>
+        <div className="mt-4 space-y-4">
+          <MobileField label="Semester">
+            <select
+              className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-900 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+              value={course.folderId ?? ""}
+              onChange={(event) =>
+                moveCourseToFolder(course.id, event.target.value || null)
+              }
+            >
+              <option value="">Unfiled</option>
+              {folders.map((folder) => (
+                <option key={folder.id} value={folder.id}>
+                  {folderDisplayName(folder)}
+                </option>
+              ))}
+            </select>
+          </MobileField>
+          <div className="grid grid-cols-2 gap-3">
+            <MobileField label="Credit">
+              <input
+                className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-base font-semibold text-slate-900 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+                inputMode="decimal"
+                value={course.creditWeight ?? ""}
+                onChange={(event) => {
+                  const value = parseFlexibleNumber(event.target.value);
+                  updateCourse(course.id, {
+                    creditWeight:
+                      event.target.value === "" || value == null ? null : value,
+                  });
+                }}
+                placeholder="Default"
+              />
+            </MobileField>
+            <MobileField label="GPA mode">
+              <select
+                className="min-h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 text-base font-semibold text-slate-900 outline-none focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+                value={course.gradeMode ?? "graded"}
+                onChange={(event) =>
+                  updateCourse(course.id, {
+                    gradeMode: event.target.value as GradeMode,
+                  })
+                }
+              >
+                {gradeModeOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </MobileField>
+          </div>
+          <label className="flex min-h-12 items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 text-base font-bold text-slate-700">
+            Count in GPA
+            <input
+              className="h-5 w-5 accent-slate-950"
+              type="checkbox"
+              checked={course.includeInGpa ?? true}
+              onChange={(event) =>
+                updateCourse(course.id, { includeInGpa: event.target.checked })
+              }
+            />
+          </label>
+        </div>
+      </details>
 
       <button
         type="button"
@@ -2620,7 +2697,7 @@ export default function MobileApp() {
                   {activeLabel}
                 </h1>
               </div>
-              {(activeTab === "dashboard" || activeTab === "courses") && (
+              {activeTab === "dashboard" && (
                 <button
                   type="button"
                   className="grid min-h-11 min-w-11 place-items-center rounded-2xl bg-slate-950 text-white shadow-soft active:scale-[0.98]"
