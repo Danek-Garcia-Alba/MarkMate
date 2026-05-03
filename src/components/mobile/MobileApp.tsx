@@ -488,6 +488,49 @@ const IOS_SHEET_SPRING = { tension: 900, friction: 54, mass: 0.54 };
 const SWIPE_LOCK_MS = 72;
 let pageSwipePausedUntil = 0;
 
+type MobileHapticKind = "selection" | "mode" | "open" | "success" | "boundary";
+
+function triggerMobileHaptic(kind: MobileHapticKind = "selection") {
+  if (typeof window === "undefined") return;
+  const patterns: Record<MobileHapticKind, number | number[]> = {
+    selection: 8,
+    mode: [10, 22, 8],
+    open: 12,
+    success: [14, 28, 16],
+    boundary: 10,
+  };
+  const maybeNative = window as Window & {
+    webkit?: {
+      messageHandlers?: {
+        markMateHaptics?: { postMessage: (payload: { kind: MobileHapticKind }) => void };
+      };
+    };
+    Capacitor?: {
+      Plugins?: {
+        Haptics?: {
+          impact?: (options?: { style?: string }) => void;
+          selectionChanged?: () => void;
+          notification?: (options?: { type?: string }) => void;
+        };
+      };
+    };
+  };
+
+  try {
+    maybeNative.webkit?.messageHandlers?.markMateHaptics?.postMessage({ kind });
+    if (kind === "success") {
+      maybeNative.Capacitor?.Plugins?.Haptics?.notification?.({ type: "SUCCESS" });
+    } else if (kind === "selection" || kind === "boundary") {
+      maybeNative.Capacitor?.Plugins?.Haptics?.selectionChanged?.();
+    } else {
+      maybeNative.Capacitor?.Plugins?.Haptics?.impact?.({ style: "LIGHT" });
+    }
+  } catch {
+    // Native haptic bridges are optional; browser vibration is the web fallback below.
+  }
+  window.navigator.vibrate?.(patterns[kind]);
+}
+
 function pausePageSwipe(ms = 180) {
   pageSwipePausedUntil = Math.max(pageSwipePausedUntil, Date.now() + ms);
 }
@@ -697,20 +740,28 @@ function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
 }
 
 function useHorizontalSwipeNavigation(
+  activeIndex: number,
+  totalTabs: number,
   onNext: () => void,
   onPrevious: () => void,
   enabled = true
 ) {
   const onNextRef = useRef(onNext);
   const onPreviousRef = useRef(onPrevious);
+  const activeIndexRef = useRef(activeIndex);
+  const totalTabsRef = useRef(totalTabs);
   const lockRef = useRef(false);
   const clickBlockUntilRef = useRef(0);
+  const edgeHapticRef = useRef(false);
   const fallbackStartRef = useRef<{
     x: number;
     y: number;
     time: number;
     active: boolean;
   } | null>(null);
+  const [previewDirection, setPreviewDirection] = useState<
+    "next" | "previous" | null
+  >(null);
   const [{ x, opacity }, api] = useSpring(() => ({
     x: 0,
     opacity: 1,
@@ -720,11 +771,95 @@ function useHorizontalSwipeNavigation(
   useEffect(() => {
     onNextRef.current = onNext;
     onPreviousRef.current = onPrevious;
-  }, [onNext, onPrevious]);
+    activeIndexRef.current = activeIndex;
+    totalTabsRef.current = totalTabs;
+  }, [activeIndex, onNext, onPrevious, totalTabs]);
 
   useEffect(() => {
-    if (!enabled) api.set({ x: 0, opacity: 1 });
+    if (!enabled) {
+      setPreviewDirection(null);
+      api.set({ x: 0, opacity: 1 });
+    }
   }, [api, enabled]);
+
+  const canMove = (direction: "next" | "previous") => {
+    const index = activeIndexRef.current;
+    return direction === "next"
+      ? index < totalTabsRef.current - 1
+      : index > 0;
+  };
+
+  const projectedX = (movementX: number) => {
+    const width = viewportWidth();
+    const direction = movementX < 0 ? "next" : "previous";
+    if (canMove(direction)) {
+      return Math.max(-width * 0.92, Math.min(width * 0.92, movementX));
+    }
+    const resisted = movementX * 0.22;
+    return Math.max(-width * 0.16, Math.min(width * 0.16, resisted));
+  };
+
+  const resetNavigation = () => {
+    api.start({
+      x: 0,
+      opacity: 1,
+      config: IOS_PAGE_SPRING,
+      onRest: () => setPreviewDirection(null),
+    });
+  };
+
+  const completeNavigation = (
+    movementX: number,
+    movementY: number,
+    velocityX: number,
+    directionX: number
+  ) => {
+    if (!enabled || lockRef.current) return;
+    if (isPageSwipePaused()) {
+      resetNavigation();
+      return;
+    }
+    const absX = Math.abs(movementX);
+    const absY = Math.abs(movementY);
+    const horizontalIntent = absX > 7 && absX > absY * 1.1;
+    const direction: "next" | "previous" =
+      (directionX || movementX) < 0 ? "next" : "previous";
+    const allowed = canMove(direction);
+    const shouldMove =
+      allowed &&
+      horizontalIntent &&
+      (absX > viewportWidth() * 0.105 || (absX > 18 && velocityX > 0.18));
+
+    if (!shouldMove) {
+      if (horizontalIntent && !allowed) triggerMobileHaptic("boundary");
+      resetNavigation();
+      return;
+    }
+
+    lockRef.current = true;
+    clickBlockUntilRef.current = Date.now() + 260;
+    setPreviewDirection(direction);
+    let committed = false;
+    const commit = () => {
+      if (committed) return;
+      committed = true;
+      if (direction === "next") onNextRef.current();
+      else onPreviousRef.current();
+      api.set({ x: 0, opacity: 1 });
+      setPreviewDirection(null);
+      window.setTimeout(() => {
+        lockRef.current = false;
+      }, SWIPE_LOCK_MS);
+    };
+    const leavingX = direction === "next" ? -viewportWidth() : viewportWidth();
+    api.start({
+      x: leavingX,
+      opacity: 1,
+      config: { tension: 1320, friction: 58, mass: 0.46 },
+      onRest: commit,
+    });
+    window.setTimeout(commit, 180);
+  };
 
   const bind = useDrag(
     ({
@@ -754,10 +889,9 @@ function useHorizontalSwipeNavigation(
       const absX = Math.abs(mx);
       const absY = Math.abs(my);
       const horizontalIntent = absX > 7 && absX > absY * 1.1;
-      const clampedX = Math.max(
-        -viewportWidth() * 0.5,
-        Math.min(viewportWidth() * 0.5, mx)
-      );
+      const direction: "next" | "previous" = mx < 0 ? "next" : "previous";
+      const allowed = canMove(direction);
+      const clampedX = projectedX(mx);
 
       if (active) {
         if (!horizontalIntent) {
@@ -767,48 +901,27 @@ function useHorizontalSwipeNavigation(
         clickBlockUntilRef.current = Date.now() + 220;
         event.stopPropagation();
         if (event.cancelable) event.preventDefault();
+        if (allowed) {
+          setPreviewDirection(direction);
+          edgeHapticRef.current = false;
+        } else {
+          setPreviewDirection(null);
+          if (!edgeHapticRef.current && absX > 24) {
+            triggerMobileHaptic("boundary");
+            edgeHapticRef.current = true;
+          }
+        }
         api.start({
           x: clampedX,
-          opacity: 1 - Math.min(absX / viewportWidth(), 0.09),
+          opacity: 1,
           immediate: true,
         });
         return;
       }
 
       if (!last) return;
-
-      const shouldMove =
-        horizontalIntent &&
-        (absX > viewportWidth() * 0.095 || (absX > 18 && vx > 0.18));
-
-      if (shouldMove) {
-        lockRef.current = true;
-        clickBlockUntilRef.current = Date.now() + 260;
-        let committed = false;
-        const commit = () => {
-          if (committed) return;
-          committed = true;
-          if (dirX < 0) onNextRef.current();
-          else onPreviousRef.current();
-          window.setTimeout(() => {
-            lockRef.current = false;
-          }, SWIPE_LOCK_MS);
-        };
-        const leavingX = dirX < 0 ? -viewportWidth() * 0.52 : viewportWidth() * 0.52;
-        api.start({
-          x: leavingX,
-          opacity: 0.88,
-          config: { tension: 1180, friction: 56, mass: 0.48 },
-          onRest: () => {
-            commit();
-            api.set({ x: 0, opacity: 1 });
-          },
-        });
-        window.setTimeout(commit, 8);
-        return;
-      }
-
-      api.start({ x: 0, opacity: 1, config: IOS_PAGE_SPRING });
+      edgeHapticRef.current = false;
+      completeNavigation(mx, my, vx, dirX);
     },
     {
       enabled,
@@ -817,55 +930,6 @@ function useHorizontalSwipeNavigation(
       eventOptions: { passive: false },
     }
   );
-
-  const completeNavigation = (
-    movementX: number,
-    movementY: number,
-    velocityX: number,
-    directionX: number
-  ) => {
-    if (!enabled || lockRef.current) return;
-    if (isPageSwipePaused()) {
-      api.start({ x: 0, opacity: 1, config: IOS_PAGE_SPRING });
-      return;
-    }
-    const absX = Math.abs(movementX);
-    const absY = Math.abs(movementY);
-    const horizontalIntent = absX > 7 && absX > absY * 1.1;
-    const shouldMove =
-      horizontalIntent &&
-      (absX > viewportWidth() * 0.095 || (absX > 18 && velocityX > 0.18));
-
-    if (shouldMove) {
-      lockRef.current = true;
-      clickBlockUntilRef.current = Date.now() + 260;
-      let committed = false;
-      const commit = () => {
-        if (committed) return;
-        committed = true;
-        if (directionX < 0) onNextRef.current();
-        else onPreviousRef.current();
-        window.setTimeout(() => {
-          lockRef.current = false;
-        }, SWIPE_LOCK_MS);
-      };
-      const leavingX =
-        directionX < 0 ? -viewportWidth() * 0.52 : viewportWidth() * 0.52;
-      api.start({
-        x: leavingX,
-        opacity: 0.88,
-        config: { tension: 1180, friction: 56, mass: 0.48 },
-        onRest: () => {
-          commit();
-          api.set({ x: 0, opacity: 1 });
-        },
-      });
-      window.setTimeout(commit, 8);
-      return;
-    }
-
-    api.start({ x: 0, opacity: 1, config: IOS_PAGE_SPRING });
-  };
 
   return {
     bind: () => ({
@@ -905,15 +969,24 @@ function useHorizontalSwipeNavigation(
         const absY = Math.abs(my);
         const horizontalIntent = absX > 7 && absX > absY * 1.1;
         if (!horizontalIntent) return;
+        const direction: "next" | "previous" = mx < 0 ? "next" : "previous";
+        const allowed = canMove(direction);
         clickBlockUntilRef.current = Date.now() + 220;
         event.stopPropagation();
         if (event.cancelable) event.preventDefault();
+        if (allowed) {
+          setPreviewDirection(direction);
+          edgeHapticRef.current = false;
+        } else {
+          setPreviewDirection(null);
+          if (!edgeHapticRef.current && absX > 24) {
+            triggerMobileHaptic("boundary");
+            edgeHapticRef.current = true;
+          }
+        }
         api.start({
-          x: Math.max(
-            -viewportWidth() * 0.5,
-            Math.min(viewportWidth() * 0.5, mx)
-          ),
-          opacity: 1 - Math.min(absX / viewportWidth(), 0.09),
+          x: projectedX(mx),
+          opacity: 1,
           immediate: true,
         });
       },
@@ -924,16 +997,30 @@ function useHorizontalSwipeNavigation(
         const mx = event.clientX - start.x;
         const my = event.clientY - start.y;
         const velocityX = Math.abs(mx) / Math.max(Date.now() - start.time, 1);
+        edgeHapticRef.current = false;
         completeNavigation(mx, my, velocityX, Math.sign(mx) || 1);
       },
       onPointerCancelCapture: () => {
         fallbackStartRef.current = null;
-        api.start({ x: 0, opacity: 1, config: IOS_PAGE_SPRING });
+        edgeHapticRef.current = false;
+        resetNavigation();
       },
     }),
+    previewDirection,
     style: {
       transform: x.to((value) => `translate3d(${value}px,0,0)`),
       opacity,
+      touchAction: "pan-y",
+    },
+    previewStyle: {
+      transform: x.to((value) => {
+        const start =
+          previewDirection === "next" ? viewportWidth() : -viewportWidth();
+        return `translate3d(${start + value}px,0,0)`;
+      }),
+      opacity: x.to((value) =>
+        previewDirection ? Math.min(1, Math.max(0.18, Math.abs(value) / 120)) : 0
+      ),
       touchAction: "pan-y",
     },
   };
@@ -988,6 +1075,169 @@ function customSlatePreview(themeId: string) {
   return previews[themeId] ?? previews.classic;
 }
 
+type MobileIdentityInfo = {
+  eyebrow: string;
+  title: string;
+  intro: string;
+  facts: string[];
+  closer: string;
+};
+
+const markMateIdentityInfo: MobileIdentityInfo = {
+  eyebrow: "Built by students",
+  title: "Why MarkMate exists",
+  intro:
+    "MarkMate started as the app we wished we had during the weeks when grades, deadlines, weights, and GPA rules were scattered everywhere.",
+  facts: [
+    "It is designed to make your semester feel less like a spreadsheet and more like a plan you can actually trust.",
+    "The goal is simple: help students understand where they stand, what matters next, and what they need to do without digging through five tabs.",
+    "We built it with the same pressure in mind that students feel every term, so the app should feel useful without feeling judgey.",
+  ],
+  closer:
+    "You bring the courses. MarkMate keeps the math, timing, and little panic spirals under control.",
+};
+
+const universityIdentityInfo: Record<string, MobileIdentityInfo> = {
+  uoft: {
+    eyebrow: "Founded 1827",
+    title: "University of Toronto",
+    intro:
+      "U of T is huge, urban, research-heavy, and built for students who want range as much as reputation.",
+    facts: [
+      "Three campuses, more than 100,000 students in 2024-25, and a scientific legacy that includes the isolation of insulin.",
+      "The academic depth is real, which is why the UofTears nickname works as community comic relief instead of just a roast.",
+      "This is the school where opportunities are enormous and your calendar may occasionally feel like it has developed a personality.",
+    ],
+    closer: "High standards, big city energy, and a lot of room to become dangerous at your thing.",
+  },
+  tmu: {
+    eyebrow: "Founded 1948",
+    title: "Toronto Metropolitan University",
+    intro:
+      "TMU is downtown, applied, career-focused, and unusually good at making the city feel like part of the classroom.",
+    facts: [
+      "Roughly 47,000 students in 2025-26, with a strong identity around innovation, entrepreneurship, and city building.",
+      "The commuter realism is part of the personality: caffeine, transit timing, and turning downtown errands into networking.",
+      "Its incubator reputation is serious, with thousands of startups helped and major funding raised.",
+    ],
+    closer: "TMU is practical city energy with a surprisingly sharp professional edge.",
+  },
+  york: {
+    eyebrow: "Founded 1959",
+    title: "York University",
+    intro:
+      "York is one of Canada's biggest and most diverse universities, with a modern GTA identity and serious breadth.",
+    facts: [
+      "More than 53,000 students from 160-plus countries study across Keele, Glendon, and Markham.",
+      "Its strengths are scale, access, interdisciplinarity, social impact, and global perspective.",
+      "The transit stories are basically a shared campus language, which somehow turns movement into community.",
+    ],
+    closer: "York feels like the GTA in university form: big, complex, and full of different routes in.",
+  },
+  western: {
+    eyebrow: "Founded 1878",
+    title: "Western University",
+    intro:
+      "Western is polished, research-intensive, high-achieving, and very comfortable with its own confidence.",
+    facts: [
+      "More than 42,000 students study across arts, sciences, health, law, engineering, business, and more.",
+      "Its intellectual history includes Frederick Banting's insulin breakthrough note and cancer-treatment research milestones.",
+      "The social stereotype is work-hard, play-hard, ideally with a case competition and weekend plan in the same phone folder.",
+    ],
+    closer: "Western is ambition with extrovert energy and a very organized calendar.",
+  },
+  guelph: {
+    eyebrow: "Founded 1964",
+    title: "University of Guelph",
+    intro:
+      "Guelph connects life sciences, food, environment, agriculture, business, wellness, and hands-on learning in a way that actually makes sense.",
+    facts: [
+      "It has more than 36,000 students, three campuses, and one of the world's most recognizable veterinary schools.",
+      "The food reputation is not fake. People bring it up because it is genuinely part of the Guelph plot.",
+      "Animals, sustainability, food systems, and wellness all fit the same campus personality.",
+    ],
+    closer: "Guelph is practical, warm, and probably better fed than everyone else.",
+  },
+  laurier: {
+    eyebrow: "Founded 1911",
+    title: "Wilfrid Laurier University",
+    intro:
+      "Laurier has a friendly, mid-sized feel with real strength in business, economics, social sciences, music, and career prep.",
+    facts: [
+      "About 23,600 students study across southern Ontario, anchored by Waterloo.",
+      "Its business school is AACSB accredited, and Laurier highlights Canada's largest business-degree co-op program.",
+      "The community vibe and social reputation fit together: warm, employable, and probably aware of the weekend plan already.",
+    ],
+    closer: "Laurier is approachable without being unserious, which is harder to pull off than it looks.",
+  },
+  waterloo: {
+    eyebrow: "Founded 1957",
+    title: "University of Waterloo",
+    intro:
+      "Waterloo treats co-op, engineering, computer science, math, startups, and employability like one ecosystem.",
+    facts: [
+      "More than 41,000 students study there annually, with the world's largest co-operative education program.",
+      "Over 26,000 active co-op students connect with employers across more than 70 countries.",
+      "Your resume gets upgraded every four months, while the campus wildlife still behaves like it has committee authority.",
+    ],
+    closer: "Waterloo is intense, inventive, and very good at turning school into real-world momentum.",
+  },
+  brock: {
+    eyebrow: "Founded 1964",
+    title: "Brock University",
+    intro:
+      "Brock is comprehensive but personal, with Niagara woven into its academic and campus identity.",
+    facts: [
+      "Just over 19,000 students study in St. Catharines, with strength in business, health, education, and grape-and-wine research.",
+      "The Grape Stomp is a signature tradition, which is funny before you even remember where the campus is.",
+      "Brock can be serious academically and still let purple grape juice become institutional mythology.",
+    ],
+    closer: "Brock has regional character in the best way: grounded, social, and hard to confuse with anywhere else.",
+  },
+  queens: {
+    eyebrow: "Founded 1841",
+    title: "Queen's University",
+    intro:
+      "Queen's is historic, tradition-rich, high-spirited, and deeply comfortable with its own identity.",
+    facts: [
+      "About 28,500 full-time students study across more than 235 academic areas in Kingston.",
+      "Homecoming has a century of history, and engineering rituals like jackets and the Grease Pole are still very much alive.",
+      "This is the kind of school where spirit has tenure and traditions keep getting passed down like campus lore.",
+    ],
+    closer: "Queen's knows exactly what it is, and honestly, that confidence is part of the charm.",
+  },
+  uottawa: {
+    eyebrow: "Founded 1848",
+    title: "University of Ottawa",
+    intro:
+      "uOttawa is bilingual, civically plugged-in, research-active, and built for students who like language, policy, law, and public life.",
+    facts: [
+      "Nearly 50,000 students study at the world's largest bilingual English-French university.",
+      "Its location in Canada's capital makes public service, co-op, and professional experience feel close to the classroom.",
+      "Panda Game week is fully capable of hijacking the collective attention span.",
+    ],
+    closer: "uOttawa can be serious in two languages and still know when rivalry season has arrived.",
+  },
+  mcgill: {
+    eyebrow: "Founded 1821",
+    title: "McGill University",
+    intro:
+      "McGill is prestigious, global, intellectually demanding, and unmistakably shaped by Montreal.",
+    facts: [
+      "It had 40,531 students in fall 2025, with nearly 30 percent international students from more than 150 countries.",
+      "Its history reaches from early sports culture to Archie, an early internet search engine.",
+      "Campus folklore keeps it human: Cloudberry the white squirrel somehow makes a world-famous university feel more touchable.",
+    ],
+    closer: "McGill is big reputation, sharp academics, and a city constantly tempting you away from the library.",
+  },
+};
+
+function mobileIdentityInfo(appMode: "custom" | "university", themeId: string) {
+  return appMode === "university"
+    ? universityIdentityInfo[themeId] ?? universityIdentityInfo.uoft
+    : markMateIdentityInfo;
+}
+
 function useGpaReport() {
   const courses = useCourseStore((state) => state.courses);
   const folders = useCourseStore((state) => state.folders);
@@ -1029,6 +1279,35 @@ function compactFolderLabel(folder: CourseFolder) {
 function formatPercent(value: number | null | undefined) {
   if (value == null || !Number.isFinite(value)) return "--";
   return `${Number(value.toFixed(1)).toString()}%`;
+}
+
+type MobileGpaCourseListKind = "included" | "waiting";
+
+function waitingGpaCourses(report: UniversityGpaReport) {
+  return report.cumulative.excludedCourses.filter((item) =>
+    /not completed|No final grade|missing or zero/i.test(item.reason)
+  );
+}
+
+function gpaCourseTitle(record: UniversityGpaReport["cumulative"]["includedCourses"][number]["record"]) {
+  return record.code || record.title || "Course";
+}
+
+function gpaCourseMeta(record: UniversityGpaReport["cumulative"]["includedCourses"][number]["record"]) {
+  const term = record.term === "FallWinter" ? "Fall/Winter" : record.term;
+  const credits =
+    typeof record.creditWeight === "number" ? formatCredits(record.creditWeight) : "0";
+  return `Year ${record.year} / ${term} / ${credits} credits`;
+}
+
+function gpaIncludedDisplay(
+  item: UniversityGpaReport["cumulative"]["includedCourses"][number],
+  report: UniversityGpaReport
+) {
+  const value = formatScaleValue(item.value);
+  return report.policy.scaleKind === "percent"
+    ? `${value}%`
+    : `${value} ${report.policy.scaleLabel}`;
 }
 
 function formatShortDate(dateISO: string | null | undefined) {
@@ -1369,7 +1648,16 @@ function MobileBottomSheet({
               <button
                 type="button"
                 className="grid min-h-11 min-w-11 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 active:scale-[0.98]"
-                onClick={onClose}
+                data-sheet-drag-block="true"
+                onPointerDown={(event) => event.stopPropagation()}
+                onPointerUp={(event) => {
+                  event.stopPropagation();
+                  onClose();
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onClose();
+                }}
                 aria-label="Close"
               >
                 <X className="h-5 w-5" />
@@ -1616,6 +1904,70 @@ function MobileSchoolMark({
   );
 }
 
+function MobileIdentityInfoSheet({
+  open,
+  onClose,
+  mode,
+  themeId,
+  label,
+}: {
+  open: boolean;
+  onClose: () => void;
+  mode: "custom" | "university";
+  themeId: string;
+  label: string;
+}) {
+  const info = mobileIdentityInfo(mode, themeId);
+
+  return (
+    <MobileBottomSheet title={mode === "university" ? label : "MarkMate"} open={open} onClose={onClose}>
+      <div className="space-y-3 pb-1">
+        <section className="mobile-identity-story rounded-[1.55rem] p-4 text-white">
+          <div className="flex items-start gap-3">
+            <MobileSchoolMark
+              themeId={mode === "university" ? themeId : "markmate"}
+              label={label}
+              className="ring-white/30"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-white/58">
+                {info.eyebrow}
+              </p>
+              <h2 className="mt-1 text-2xl font-black leading-none tracking-tight">
+                {info.title}
+              </h2>
+            </div>
+          </div>
+          <p className="mt-4 text-base font-semibold leading-relaxed text-white/78">
+            {info.intro}
+          </p>
+        </section>
+
+        <div className="space-y-2">
+          {info.facts.map((fact, index) => (
+            <article
+              key={fact}
+              className="mobile-identity-fact rounded-[1.25rem] border border-slate-200 bg-white p-3 shadow-[0_14px_30px_-28px_rgba(15,23,42,0.45)]"
+              style={{ "--fact-index": index } as React.CSSProperties}
+            >
+              <p className="text-[0.68rem] font-black uppercase tracking-wide text-slate-400">
+                Note {index + 1}
+              </p>
+              <p className="mt-1 text-sm font-bold leading-relaxed text-slate-700">
+                {fact}
+              </p>
+            </article>
+          ))}
+        </div>
+
+        <p className="rounded-[1.35rem] border border-white/70 bg-slate-50 px-4 py-3 text-sm font-black leading-relaxed text-slate-700">
+          {info.closer}
+        </p>
+      </div>
+    </MobileBottomSheet>
+  );
+}
+
 function courseWeightStatus(totalWeights: number) {
   if (Math.abs(totalWeights - 100) <= 0.01) {
     return {
@@ -1805,9 +2157,11 @@ function MobileCourseProgressPanel({
 function MobileGpaHero({
   report,
   onOpenGpa,
+  onOpenCourseList,
 }: {
   report: UniversityGpaReport;
   onOpenGpa: () => void;
+  onOpenCourseList: (kind: MobileGpaCourseListKind) => void;
 }) {
   const appMode = useCourseStore((state) => state.appMode ?? "custom");
   const completeCourses = report.cumulative.includedCourses.length;
@@ -1848,22 +2202,38 @@ function MobileGpaHero({
           </button>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <div className="rounded-2xl border border-white/20 bg-white/10 px-3 py-2 backdrop-blur">
+          <button
+            type="button"
+            className="rounded-2xl border border-white/20 bg-white/10 px-3 py-2 text-left backdrop-blur transition active:scale-[0.98]"
+            data-page-swipe-block="true"
+            onClick={() => {
+              triggerMobileHaptic("selection");
+              onOpenCourseList("included");
+            }}
+          >
             <p className="text-[0.65rem] font-bold uppercase tracking-wide text-white/60">
               Included
             </p>
             <p className="mt-0.5 text-xl font-black tabular-nums">
               {completeCourses}
             </p>
-          </div>
-          <div className="rounded-2xl border border-white/20 bg-white/10 px-3 py-2 backdrop-blur">
+          </button>
+          <button
+            type="button"
+            className="rounded-2xl border border-white/20 bg-white/10 px-3 py-2 text-left backdrop-blur transition active:scale-[0.98]"
+            data-page-swipe-block="true"
+            onClick={() => {
+              triggerMobileHaptic("selection");
+              onOpenCourseList("waiting");
+            }}
+          >
             <p className="text-[0.65rem] font-bold uppercase tracking-wide text-white/60">
               Waiting
             </p>
             <p className="mt-0.5 text-xl font-black tabular-nums">
               {waitingCount}
             </p>
-          </div>
+          </button>
         </div>
       </div>
     </section>
@@ -1883,7 +2253,10 @@ function EmptyCourses({ onAddCourse }: { onAddCourse: () => void }) {
       <button
         type="button"
         className="mobile-glow-action mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-bold active:scale-[0.98]"
-        onClick={onAddCourse}
+        onClick={() => {
+          triggerMobileHaptic("open");
+          onAddCourse();
+        }}
       >
         <Plus className="h-5 w-5" />
         Add course
@@ -1928,9 +2301,11 @@ function EmptyCustomStructure({
 function MobileIdentityCard({
   courseCount,
   semesterCount,
+  onOpenIdentity,
 }: {
   courseCount: number;
   semesterCount: number;
+  onOpenIdentity: () => void;
 }) {
   const appMode = useCourseStore((state) => state.appMode ?? "custom");
   const universityThemeId = useCourseStore(
@@ -1964,11 +2339,21 @@ function MobileIdentityCard({
         <div className="grid grid-cols-[1fr_7rem] gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-3">
-              <MobileSchoolMark
-                themeId={activeTheme.id}
-                label={activeTheme.label}
-                className="ring-white/35"
-              />
+              <button
+                type="button"
+                className="rounded-[1.15rem] text-left active:scale-[0.98]"
+                onClick={() => {
+                  triggerMobileHaptic("selection");
+                  onOpenIdentity();
+                }}
+                aria-label={`About ${activeTheme.label}`}
+              >
+                <MobileSchoolMark
+                  themeId={activeTheme.id}
+                  label={activeTheme.label}
+                  className="ring-white/35"
+                />
+              </button>
               <div className="min-w-0">
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-white/60">
                   MarkMate
@@ -1994,9 +2379,10 @@ function MobileIdentityCard({
                     className={`min-h-9 rounded-xl text-xs font-black active:scale-[0.98] ${
                       active ? "bg-white text-slate-950" : "text-white/70"
                     }`}
-                    onClick={() =>
-                      switchMobileAppMode(option.id as "custom" | "university")
-                    }
+                    onClick={() => {
+                      if (!active) triggerMobileHaptic("mode");
+                      switchMobileAppMode(option.id as "custom" | "university");
+                    }}
                   >
                     {option.label}
                   </button>
@@ -2260,7 +2646,11 @@ function MobileHomeCommandPanel({
         <button
           type="button"
           className="mobile-glow-action inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-3 text-base font-black active:scale-[0.98]"
-          onClick={needsCustomSetup ? onGoCourses : onAddCourse}
+          onClick={() => {
+            triggerMobileHaptic(needsCustomSetup ? "selection" : "open");
+            if (needsCustomSetup) onGoCourses();
+            else onAddCourse();
+          }}
         >
           <Plus className="h-5 w-5" />
           {needsCustomSetup ? "New year" : "New course"}
@@ -2293,7 +2683,14 @@ function MobileDashboard({
 }) {
   const courses = useCourseStore((state) => state.courses);
   const folders = useCourseStore((state) => state.folders);
+  const appMode = useCourseStore((state) => state.appMode ?? "custom");
+  const universityThemeId = useCourseStore(
+    (state) => state.universityThemeId ?? "uoft"
+  );
+  const customThemeId = useCourseStore((state) => state.customThemeId ?? "classic");
+  const activeTheme = getActiveTheme(appMode, universityThemeId, customThemeId);
   const report = useGpaReport();
+  const [identityOpen, setIdentityOpen] = useState(false);
   const foldersById = useMemo(
     () =>
       new Map<string, CourseFolder>(
@@ -2324,6 +2721,7 @@ function MobileDashboard({
       <MobileIdentityCard
         courseCount={courses.length}
         semesterCount={folders.length}
+        onOpenIdentity={() => setIdentityOpen(true)}
       />
       <MobileHomeCommandPanel
         report={report}
@@ -2338,6 +2736,13 @@ function MobileDashboard({
         folderCount={folders.length}
       />
 
+      <MobileIdentityInfoSheet
+        open={identityOpen}
+        onClose={() => setIdentityOpen(false)}
+        mode={appMode}
+        themeId={appMode === "university" ? universityThemeId : "markmate"}
+        label={activeTheme.label}
+      />
     </div>
   );
 }
@@ -2993,6 +3398,7 @@ function MobileCourseCreateSheet({
         : liveFolderValue.trim()
         ? liveFolderValue
         : null;
+    triggerMobileHaptic("success");
     const courseId = addCourse(liveName.trim() || "New Course", liveFolderId);
     onClose();
     onCreated(courseId, liveFolderId);
@@ -3003,12 +3409,17 @@ function MobileCourseCreateSheet({
 
   const submitTouchProps = {
     onPointerDown: (event: React.PointerEvent<HTMLButtonElement>) => {
-      if (event.pointerType !== "touch") return;
-      event.preventDefault();
+      event.stopPropagation();
+      if (event.pointerType === "touch") event.preventDefault();
+    },
+    onPointerUp: (event: React.PointerEvent<HTMLButtonElement>) => {
       event.stopPropagation();
       submit();
     },
-    onClick: submit,
+    onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      submit();
+    },
   };
 
   return (
@@ -4438,10 +4849,16 @@ function MobileGpa({
   const yearRows = gpaYearRows(report);
   const sessionRows = gpaSessionRows(report);
   const rows = [...yearRows, ...sessionRows];
+  const [courseListOpen, setCourseListOpen] =
+    useState<MobileGpaCourseListKind | null>(null);
 
   return (
     <div className="space-y-2.5">
-      <MobileGpaHero report={report} onOpenGpa={onOpenGpa} />
+      <MobileGpaHero
+        report={report}
+        onOpenGpa={onOpenGpa}
+        onOpenCourseList={setCourseListOpen}
+      />
       <section className="rounded-[1.65rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -4489,7 +4906,114 @@ function MobileGpa({
           )}
         </div>
       </section>
+      <MobileGpaCourseListSheet
+        open={courseListOpen != null}
+        kind={courseListOpen ?? "included"}
+        report={report}
+        onClose={() => setCourseListOpen(null)}
+      />
     </div>
+  );
+}
+
+function MobileGpaCourseListSheet({
+  open,
+  kind,
+  report,
+  onClose,
+}: {
+  open: boolean;
+  kind: MobileGpaCourseListKind;
+  report: UniversityGpaReport;
+  onClose: () => void;
+}) {
+  const included = report.cumulative.includedCourses;
+  const waiting = waitingGpaCourses(report);
+  const isIncluded = kind === "included";
+  const count = isIncluded ? included.length : waiting.length;
+
+  return (
+    <MobileBottomSheet
+      title={isIncluded ? "Included courses" : "Waiting courses"}
+      open={open}
+      onClose={onClose}
+    >
+      <div className="space-y-3 pb-1">
+        <section className="mobile-gpa-list-summary rounded-[1.45rem] p-4 text-white">
+          <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-white/58">
+            GPA estimate
+          </p>
+          <div className="mt-2 flex items-end justify-between gap-4">
+            <h2 className="text-3xl font-black leading-none tracking-tight">
+              {count}
+            </h2>
+            <p className="pb-1 text-sm font-black text-white/70">
+              {isIncluded ? "counting now" : "waiting on final data"}
+            </p>
+          </div>
+        </section>
+
+        <div className="space-y-2">
+          {isIncluded
+            ? included.map((item) => (
+                <article
+                  key={item.record.id}
+                  className="mobile-gpa-course-row rounded-[1.25rem] border border-slate-200 bg-white p-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-black text-slate-950">
+                        {gpaCourseTitle(item.record)}
+                      </p>
+                      <p className="mt-0.5 text-xs font-bold text-slate-500">
+                        {gpaCourseMeta(item.record)}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-2xl bg-emerald-50 px-3 py-1 text-sm font-black tabular-nums text-emerald-700">
+                      {gpaIncludedDisplay(item, report)}
+                    </span>
+                  </div>
+                  {item.warning && (
+                    <p className="mt-2 rounded-2xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
+                      {item.warning}
+                    </p>
+                  )}
+                </article>
+              ))
+            : waiting.map((item) => (
+                <article
+                  key={item.record.id}
+                  className="mobile-gpa-course-row rounded-[1.25rem] border border-slate-200 bg-white p-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-base font-black text-slate-950">
+                        {gpaCourseTitle(item.record)}
+                      </p>
+                      <p className="mt-0.5 text-xs font-bold text-slate-500">
+                        {gpaCourseMeta(item.record)}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-2xl bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+                      Pending
+                    </span>
+                  </div>
+                  <p className="mt-2 rounded-2xl bg-slate-50 px-3 py-2 text-xs font-bold text-slate-500">
+                    {item.reason}
+                  </p>
+                </article>
+              ))}
+        </div>
+
+        {count === 0 && (
+          <p className="rounded-[1.25rem] border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm font-bold text-slate-500">
+            {isIncluded
+              ? "No completed GPA courses are included yet."
+              : "Nothing is waiting right now."}
+          </p>
+        )}
+      </div>
+    </MobileBottomSheet>
   );
 }
 
@@ -5168,9 +5692,10 @@ function MobileSettings() {
                 className={`min-h-10 rounded-xl text-sm font-black ${
                   active ? "bg-white text-slate-950 shadow-soft" : "text-slate-500"
                 }`}
-                onClick={() =>
-                  switchMobileAppMode(option.id as "custom" | "university")
-                }
+                onClick={() => {
+                  if (!active) triggerMobileHaptic("mode");
+                  switchMobileAppMode(option.id as "custom" | "university");
+                }}
               >
                 {option.label}
               </button>
@@ -5229,7 +5754,10 @@ function MobileSettings() {
                         ? "border-slate-950 bg-slate-950 text-white"
                         : "border-slate-200 bg-white text-slate-700"
                     }`}
-                    onClick={() => setUniversityTheme(option.id)}
+                    onClick={() => {
+                      if (!active) triggerMobileHaptic("selection");
+                      setUniversityTheme(option.id);
+                    }}
                   >
                     {option.label}
                   </button>
@@ -5465,8 +5993,6 @@ export default function MobileApp() {
   const keyboardOpen = useMobileKeyboardOpen();
 
   const showCourseDetail = activeTab === "courses" && selectedCourseId;
-  const activeLabel =
-    mobileTabs.find((tab) => tab.id === activeTab)?.label ?? "MarkMate";
 
   const courseContextFromId = (
     courseId: string,
@@ -5521,7 +6047,13 @@ export default function MobileApp() {
       return mobileTabs[index - 1].id;
     });
   };
+  const activeTabIndex = Math.max(
+    0,
+    mobileTabs.findIndex((tab) => tab.id === activeTab)
+  );
   const tabSwipeHandlers = useHorizontalSwipeNavigation(
+    activeTabIndex,
+    mobileTabs.length,
     goToNextTab,
     goToPreviousTab,
     !showCourseDetail &&
@@ -5529,6 +6061,12 @@ export default function MobileApp() {
       !gpaOpen &&
       !(activeTab === "courses" && coursesNestedOpen)
   );
+  const previewTab =
+    tabSwipeHandlers.previewDirection === "next"
+      ? mobileTabs[activeTabIndex + 1]?.id
+      : tabSwipeHandlers.previewDirection === "previous"
+      ? mobileTabs[activeTabIndex - 1]?.id
+      : null;
 
   const hasUniversitySemesterLayout = useMemo(
     () =>
@@ -5560,6 +6098,102 @@ export default function MobileApp() {
     window.scrollTo({ top: 0, left: 0 });
   }, [activeTab, selectedCourseId]);
 
+  const renderTabContent = (tab: MobileTab, preview = false) => {
+    if (showCourseDetail && !preview) {
+      return (
+        <MobileCourseDetail
+          courseId={selectedCourseId}
+          onBack={() => setSelectedCourseId(null)}
+        />
+      );
+    }
+
+    if (tab === "dashboard") {
+      return (
+        <MobileDashboard
+          onOpenGpa={preview ? () => {} : () => setGpaOpen(true)}
+          onOpenCourse={preview ? () => {} : openCourse}
+          onAddCourse={
+            preview
+              ? () => {}
+              : () => openCourseCreate()
+          }
+          onGoCalendar={
+            preview
+              ? () => {}
+              : () => {
+                  setSelectedCourseId(null);
+                  setCourseReturnContext(null);
+                  setCoursesNestedOpen(false);
+                  setActiveTab("calendar");
+                }
+          }
+          onGoCourses={
+            preview
+              ? () => {}
+              : () => {
+                  setSelectedCourseId(null);
+                  setCourseReturnContext(null);
+                  setCoursesNestedOpen(false);
+                  setActiveTab("courses");
+                }
+          }
+        />
+      );
+    }
+
+    if (tab === "courses") {
+      return (
+        <MobileCourses
+          onOpenCourse={preview ? () => {} : openCourse}
+          onAddCourse={preview ? () => {} : openCourseCreate}
+          onNestedViewChange={preview ? undefined : setCoursesNestedOpen}
+          initialScopeId={preview ? null : courseReturnContext?.scopeId ?? null}
+          initialYear={preview ? null : courseReturnContext?.year ?? null}
+        />
+      );
+    }
+
+    if (tab === "calendar") {
+      return <MobileCalendar onOpenCourse={preview ? () => {} : openCourse} />;
+    }
+
+    if (tab === "gpa") {
+      return <MobileGpa onOpenGpa={preview ? () => {} : () => setGpaOpen(true)} />;
+    }
+
+    return <MobileSettings />;
+  };
+
+  const renderTabHeader = (tab: MobileTab) => {
+    const label = mobileTabs.find((item) => item.id === tab)?.label ?? "MarkMate";
+    return (
+      <header className="sticky top-0 z-20 -mx-5 mb-4 border-b border-white/70 bg-white/86 px-5 pb-3 pt-[calc(env(safe-area-inset-top)+0.6rem)] shadow-[0_16px_42px_-34px_rgba(15,23,42,0.5)] backdrop-blur">
+        <div className="flex items-center gap-3">
+          <MobileSchoolMark
+            themeId={appMode === "university" ? activeTheme.id : "markmate"}
+            label={activeTheme.label}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+              {activeTheme.label}
+            </p>
+            <h1 className="truncate text-xl font-black tracking-tight">
+              {label}
+            </h1>
+          </div>
+        </div>
+      </header>
+    );
+  };
+
+  const renderTabFrame = (tab: MobileTab, preview = false) => (
+    <>
+      {!showCourseDetail && renderTabHeader(tab)}
+      {renderTabContent(tab, preview)}
+    </>
+  );
+
   return (
     <div
       className="app-shell min-h-[100dvh] overscroll-none bg-slate-50 text-slate-950"
@@ -5583,71 +6217,27 @@ export default function MobileApp() {
       }
     >
       <animated.main
-        className={`mx-auto min-h-[100dvh] w-full max-w-md px-5 ${
+        className={`relative mx-auto min-h-[100dvh] w-full max-w-md overflow-x-hidden px-5 ${
           showCourseDetail ? "pt-[calc(env(safe-area-inset-top)+0.6rem)]" : "pt-0"
         } ${
           keyboardOpen ? "pb-8" : "pb-[calc(env(safe-area-inset-bottom)+7rem)]"
         }`}
-        style={tabSwipeHandlers.style}
         {...tabSwipeHandlers.bind()}
       >
-        {!showCourseDetail && (
-          <header className="sticky top-0 z-20 -mx-5 mb-4 border-b border-white/70 bg-white/86 px-5 pb-3 pt-[calc(env(safe-area-inset-top)+0.6rem)] shadow-[0_16px_42px_-34px_rgba(15,23,42,0.5)] backdrop-blur">
-            <div className="flex items-center gap-3">
-              <MobileSchoolMark
-                themeId={appMode === "university" ? activeTheme.id : "markmate"}
-                label={activeTheme.label}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-                  {activeTheme.label}
-                </p>
-                <h1 className="truncate text-xl font-black tracking-tight">
-                  {activeLabel}
-                </h1>
-              </div>
-            </div>
-          </header>
-        )}
-
-        {showCourseDetail ? (
-          <MobileCourseDetail
-            courseId={selectedCourseId}
-            onBack={() => setSelectedCourseId(null)}
-          />
-        ) : activeTab === "dashboard" ? (
-          <MobileDashboard
-            onOpenGpa={() => setGpaOpen(true)}
-            onOpenCourse={openCourse}
-            onAddCourse={() => openCourseCreate()}
-            onGoCalendar={() => {
-              setSelectedCourseId(null);
-              setCourseReturnContext(null);
-              setCoursesNestedOpen(false);
-              setActiveTab("calendar");
-            }}
-            onGoCourses={() => {
-              setSelectedCourseId(null);
-              setCourseReturnContext(null);
-              setCoursesNestedOpen(false);
-              setActiveTab("courses");
-            }}
-          />
-        ) : activeTab === "courses" ? (
-          <MobileCourses
-            onOpenCourse={openCourse}
-            onAddCourse={openCourseCreate}
-            onNestedViewChange={setCoursesNestedOpen}
-            initialScopeId={courseReturnContext?.scopeId ?? null}
-            initialYear={courseReturnContext?.year ?? null}
-          />
-        ) : activeTab === "calendar" ? (
-          <MobileCalendar onOpenCourse={openCourse} />
-        ) : activeTab === "gpa" ? (
-          <MobileGpa onOpenGpa={() => setGpaOpen(true)} />
-        ) : (
-          <MobileSettings />
-        )}
+        <div className="relative">
+          <animated.div style={tabSwipeHandlers.style}>
+            {renderTabFrame(activeTab)}
+          </animated.div>
+          {previewTab && !showCourseDetail && (
+            <animated.div
+              className="pointer-events-none absolute inset-x-0 top-0"
+              aria-hidden="true"
+              style={tabSwipeHandlers.previewStyle}
+            >
+              {renderTabFrame(previewTab, true)}
+            </animated.div>
+          )}
+        </div>
       </animated.main>
 
       {!showCourseDetail && !keyboardOpen && (

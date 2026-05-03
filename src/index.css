@@ -952,6 +952,69 @@ textarea {
     linear-gradient(135deg, #020617, #0f172a);
 }
 
+.mobile-identity-story,
+.mobile-gpa-list-summary {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.24), transparent 36%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--theme-primary, #0f172a) 78%, #37aee2),
+      color-mix(in srgb, var(--theme-primary, #0f172a) 62%, #020617) 54%,
+      color-mix(in srgb, var(--theme-accent, #30b987) 62%, #d7a43a)
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 22px 48px -34px rgba(15, 23, 42, 0.74);
+}
+
+.mobile-identity-story::after,
+.mobile-gpa-list-summary::after {
+  position: absolute;
+  inset: -64% -30%;
+  z-index: 0;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(
+    108deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.24) 49%,
+    transparent 60%
+  );
+  mix-blend-mode: screen;
+  animation: mobile-widget-gloss 5.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.mobile-identity-story > *,
+.mobile-gpa-list-summary > * {
+  position: relative;
+  z-index: 1;
+}
+
+.mobile-identity-fact,
+.mobile-gpa-course-row {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 16px 34px -30px rgba(15, 23, 42, 0.42);
+}
+
+.mobile-identity-fact::before,
+.mobile-gpa-course-row::before {
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  content: "";
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--theme-accent, #30b987) 12%, transparent), transparent 36%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.92));
+}
+
 .mobile-accent-card {
   position: relative;
   isolation: isolate;
