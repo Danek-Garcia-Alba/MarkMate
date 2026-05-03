@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useDrag } from "@use-gesture/react";
 import { animated, to as springTo, useSpring } from "@react-spring/web";
@@ -69,6 +69,11 @@ import {
 } from "../../lib/gpa";
 
 type MobileTab = "dashboard" | "courses" | "calendar" | "gpa" | "settings";
+
+type MobileCourseReturnContext = {
+  scopeId?: string | null;
+  year?: string | null;
+};
 
 const mobileTabs: Array<{
   id: MobileTab;
@@ -455,9 +460,18 @@ function isInteractiveSwipeTarget(target: EventTarget | null) {
   );
 }
 
-const IOS_PAGE_SPRING = { tension: 620, friction: 42, mass: 0.72 };
-const IOS_SHEET_SPRING = { tension: 520, friction: 38, mass: 0.78 };
-const SWIPE_LOCK_MS = 180;
+function isSwipeBlockingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(
+    target.closest(
+      "input, textarea, select, a, [contenteditable='true'], [data-no-swipe='true']"
+    )
+  );
+}
+
+const IOS_PAGE_SPRING = { tension: 720, friction: 46, mass: 0.66 };
+const IOS_SHEET_SPRING = { tension: 680, friction: 48, mass: 0.68 };
+const SWIPE_LOCK_MS = 110;
 
 function viewportWidth() {
   return typeof window === "undefined" ? 390 : window.innerWidth;
@@ -505,7 +519,7 @@ function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
     const shouldComplete =
       horizontalIntent &&
       directionX > 0 &&
-      (nextX > viewportWidth() * 0.22 || (nextX > 34 && velocityX > 0.45));
+      (nextX > viewportWidth() * 0.16 || (nextX > 26 && velocityX > 0.28));
 
     if (shouldComplete) {
       lockRef.current = true;
@@ -521,13 +535,13 @@ function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
       api.start({
         x: viewportWidth(),
         opacity: 0.92,
-        config: { tension: 760, friction: 44, mass: 0.66 },
+        config: { tension: 860, friction: 46, mass: 0.62 },
         onRest: () => {
           api.set({ x: 0, opacity: 1 });
           commit();
         },
       });
-      window.setTimeout(commit, 70);
+      window.setTimeout(commit, 24);
       return;
     }
 
@@ -653,6 +667,7 @@ function useHorizontalSwipeNavigation(
   const onNextRef = useRef(onNext);
   const onPreviousRef = useRef(onPrevious);
   const lockRef = useRef(false);
+  const clickBlockUntilRef = useRef(0);
   const fallbackStartRef = useRef<{
     x: number;
     y: number;
@@ -684,7 +699,7 @@ function useHorizontalSwipeNavigation(
       if (!enabled || lockRef.current) return;
       if (
         first &&
-        isInteractiveSwipeTarget(event.target) &&
+        isSwipeBlockingTarget(event.target) &&
         !isPageSwipeAllowedFrom(event.target)
       ) {
         cancel();
@@ -704,6 +719,7 @@ function useHorizontalSwipeNavigation(
           api.start({ x: 0, opacity: 1, immediate: true });
           return;
         }
+        clickBlockUntilRef.current = Date.now() + 320;
         event.stopPropagation();
         if (event.cancelable) event.preventDefault();
         api.start({
@@ -718,10 +734,11 @@ function useHorizontalSwipeNavigation(
 
       const shouldMove =
         horizontalIntent &&
-        (absX > viewportWidth() * 0.2 || (absX > 34 && vx > 0.42));
+        (absX > viewportWidth() * 0.13 || (absX > 24 && vx > 0.26));
 
       if (shouldMove) {
         lockRef.current = true;
+        clickBlockUntilRef.current = Date.now() + 420;
         let committed = false;
         const commit = () => {
           if (committed) return;
@@ -732,17 +749,17 @@ function useHorizontalSwipeNavigation(
             lockRef.current = false;
           }, SWIPE_LOCK_MS);
         };
-        const leavingX = dirX < 0 ? -viewportWidth() * 0.34 : viewportWidth() * 0.34;
+        const leavingX = dirX < 0 ? -viewportWidth() * 0.38 : viewportWidth() * 0.38;
         api.start({
           x: leavingX,
           opacity: 0.88,
-          config: { tension: 740, friction: 44, mass: 0.66 },
+          config: { tension: 860, friction: 48, mass: 0.62 },
           onRest: () => {
             commit();
             api.set({ x: 0, opacity: 1 });
           },
         });
-        window.setTimeout(commit, 65);
+        window.setTimeout(commit, 24);
         return;
       }
 
@@ -768,10 +785,11 @@ function useHorizontalSwipeNavigation(
     const horizontalIntent = absX > 10 && absX > absY * 1.18;
     const shouldMove =
       horizontalIntent &&
-      (absX > viewportWidth() * 0.2 || (absX > 34 && velocityX > 0.42));
+      (absX > viewportWidth() * 0.13 || (absX > 24 && velocityX > 0.26));
 
     if (shouldMove) {
       lockRef.current = true;
+      clickBlockUntilRef.current = Date.now() + 420;
       let committed = false;
       const commit = () => {
         if (committed) return;
@@ -783,17 +801,17 @@ function useHorizontalSwipeNavigation(
         }, SWIPE_LOCK_MS);
       };
       const leavingX =
-        directionX < 0 ? -viewportWidth() * 0.34 : viewportWidth() * 0.34;
+        directionX < 0 ? -viewportWidth() * 0.38 : viewportWidth() * 0.38;
       api.start({
         x: leavingX,
         opacity: 0.88,
-        config: { tension: 740, friction: 44, mass: 0.66 },
+        config: { tension: 860, friction: 48, mass: 0.62 },
         onRest: () => {
           commit();
           api.set({ x: 0, opacity: 1 });
         },
       });
-      window.setTimeout(commit, 65);
+      window.setTimeout(commit, 24);
       return;
     }
 
@@ -803,11 +821,16 @@ function useHorizontalSwipeNavigation(
   return {
     bind: () => ({
       ...(typeof bind === "function" ? bind() : {}),
+      onClickCapture: (event: React.MouseEvent<HTMLElement>) => {
+        if (Date.now() > clickBlockUntilRef.current) return;
+        event.preventDefault();
+        event.stopPropagation();
+      },
       onPointerDownCapture: (event: React.PointerEvent<HTMLElement>) => {
         if (
           !enabled ||
           lockRef.current ||
-          (isInteractiveSwipeTarget(event.target) &&
+          (isSwipeBlockingTarget(event.target) &&
             !isPageSwipeAllowedFrom(event.target))
         ) {
           fallbackStartRef.current = null;
@@ -829,6 +852,7 @@ function useHorizontalSwipeNavigation(
         const absY = Math.abs(my);
         const horizontalIntent = absX > 10 && absX > absY * 1.18;
         if (!horizontalIntent) return;
+        clickBlockUntilRef.current = Date.now() + 320;
         event.stopPropagation();
         if (event.cancelable) event.preventDefault();
         api.start({
@@ -1035,31 +1059,72 @@ function MobileBottomSheet({
 }) {
   const horizontalSwipe = useHorizontalSwipeExit(onClose, open);
   const [expanded, setExpanded] = useState(false);
-  const [heightMode, setHeightMode] = useState(false);
   const sectionRef = useRef<HTMLElement | null>(null);
-  const collapsedHeightRef = useRef(0);
-  const [{ y, h }, sheetApi] = useSpring(() => ({
-    y: 0,
-    h: 0,
+  const contentMeasureRef = useRef<HTMLDivElement | null>(null);
+  const dragStartYRef = useRef(0);
+  const collapsedOffsetRef = useRef(0);
+  const expandedRef = useRef(false);
+  const [{ y }, sheetApi] = useSpring(() => ({
+    y: viewportHeight(),
     config: IOS_SHEET_SPRING,
   }));
   const closeLockRef = useRef(false);
+
+  const measureCollapsedOffset = () => {
+    const fullHeight = Math.round(viewportHeight() * 0.985);
+    const contentHeight =
+      contentMeasureRef.current?.scrollHeight ?? fullHeight * 0.58;
+    const chromeHeight = 122;
+    const collapsedHeight = Math.min(
+      fullHeight - 8,
+      Math.max(430, Math.min(fullHeight * 0.9, contentHeight + chromeHeight))
+    );
+    return Math.max(0, fullHeight - collapsedHeight);
+  };
 
   useEffect(() => {
     if (!open) return;
     closeLockRef.current = false;
     setExpanded(false);
-    setHeightMode(false);
-    sheetApi.set({ y: 0, h: 0 });
+    expandedRef.current = false;
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const nextOffset = measureCollapsedOffset();
+    collapsedOffsetRef.current = nextOffset;
+    sheetApi.set({ y: nextOffset });
+
+    const onResize = () => {
+      const updatedOffset = measureCollapsedOffset();
+      collapsedOffsetRef.current = updatedOffset;
+      sheetApi.start({
+        y: expandedRef.current ? 0 : updatedOffset,
+        immediate: true,
+      });
+    };
+
+    window.addEventListener("resize", onResize);
+    window.visualViewport?.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.visualViewport?.removeEventListener("resize", onResize);
+    };
   }, [open, sheetApi]);
 
   const closeFromDrag = () => {
     if (closeLockRef.current) return;
     closeLockRef.current = true;
-    onClose();
-    window.setTimeout(() => {
-      closeLockRef.current = false;
-    }, SWIPE_LOCK_MS);
+    sheetApi.start({
+      y: viewportHeight(),
+      config: { tension: 620, friction: 44, mass: 0.7 },
+      onRest: () => {
+        onClose();
+        window.setTimeout(() => {
+          closeLockRef.current = false;
+        }, SWIPE_LOCK_MS);
+      },
+    });
   };
 
   const handleDrag = useDrag(
@@ -1076,66 +1141,55 @@ function MobileBottomSheet({
 
       const fullHeight = Math.round(viewportHeight() * 0.985);
       if (first) {
-        collapsedHeightRef.current = Math.min(
-          sectionRef.current?.getBoundingClientRect().height ?? fullHeight * 0.72,
-          Math.round(viewportHeight() * 0.9)
-        );
-        setHeightMode(true);
-        sheetApi.set({
-          h: expanded ? fullHeight : collapsedHeightRef.current,
-          y: 0,
-        });
+        collapsedOffsetRef.current = measureCollapsedOffset();
+        dragStartYRef.current = expandedRef.current ? 0 : collapsedOffsetRef.current;
       }
 
-      const collapsedHeight =
-        collapsedHeightRef.current || Math.round(viewportHeight() * 0.72);
-      const currentBaseHeight = expanded ? fullHeight : collapsedHeight;
-      const nextHeight = Math.max(
-        Math.min(collapsedHeight, fullHeight * 0.72),
-        Math.min(fullHeight, currentBaseHeight - my)
-      );
-      const nextY = Math.max(0, Math.min(viewportHeight() * 0.72, my));
+      const collapsedOffset = collapsedOffsetRef.current || measureCollapsedOffset();
+      const dismissOffset = viewportHeight();
+      const nextY = Math.max(0, Math.min(dismissOffset, dragStartYRef.current + my));
 
       if (active) {
-        if (my < 0 || expanded) {
-          sheetApi.start({ h: nextHeight, y: 0, immediate: true });
-        } else {
-          sheetApi.start({ h: collapsedHeight, y: nextY, immediate: true });
-        }
+        sheetApi.start({ y: nextY, immediate: true });
         return;
       }
 
+      const dismissSlack = expandedRef.current
+        ? Math.min(286, fullHeight * 0.34)
+        : Math.min(170, fullHeight * 0.22);
       const shouldDismiss =
-        (!expanded && nextY > 112) || (dirY > 0 && vy > 0.72 && nextY > 58);
+        nextY > collapsedOffset + dismissSlack ||
+        (!expandedRef.current &&
+          dirY > 0 &&
+          vy > 0.86 &&
+          nextY > collapsedOffset + 56) ||
+        (expandedRef.current &&
+          dirY > 0 &&
+          vy > 1.16 &&
+          nextY > collapsedOffset + 126);
       const shouldExpand =
-        nextHeight > collapsedHeight + 72 || (dirY < 0 && vy > 0.28);
+        nextY < collapsedOffset - Math.min(126, fullHeight * 0.18) ||
+        (dirY < 0 && vy > 0.32);
       const shouldCollapse =
-        expanded && (nextHeight < fullHeight - 128 || (dirY > 0 && vy > 0.34));
+        expandedRef.current &&
+        (nextY > Math.min(fullHeight * 0.25, collapsedOffset * 0.72) ||
+          (dirY > 0 && vy > 0.38));
 
       if (shouldDismiss) {
-        sheetApi.start({
-          y: viewportHeight(),
-          h: collapsedHeight,
-          config: { tension: 540, friction: 40, mass: 0.78 },
-          onRest: closeFromDrag,
-        });
+        closeFromDrag();
         return;
       }
 
       if (shouldExpand && !shouldCollapse) {
         setExpanded(true);
-        setHeightMode(true);
-        sheetApi.start({ h: fullHeight, y: 0, config: IOS_SHEET_SPRING });
+        expandedRef.current = true;
+        sheetApi.start({ y: 0, config: IOS_SHEET_SPRING });
         return;
       }
 
       setExpanded(false);
-      sheetApi.start({
-        h: collapsedHeight,
-        y: 0,
-        config: IOS_SHEET_SPRING,
-        onRest: () => setHeightMode(false),
-      });
+      expandedRef.current = false;
+      sheetApi.start({ y: collapsedOffset, config: IOS_SHEET_SPRING });
     },
     {
       axis: "y",
@@ -1160,9 +1214,7 @@ function MobileBottomSheet({
       />
       <animated.section
         ref={sectionRef}
-        className={`absolute inset-x-0 bottom-0 overflow-hidden rounded-t-[2rem] border border-white/70 bg-white px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-4 shadow-2xl ${
-          expanded ? "max-h-[98.5dvh]" : "max-h-[90dvh]"
-        }`}
+        className="absolute inset-x-0 bottom-0 flex h-[98.5dvh] flex-col overflow-hidden rounded-t-[2rem] border border-white/70 bg-white px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-4 shadow-2xl"
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -1173,7 +1225,7 @@ function MobileBottomSheet({
           ),
           opacity: horizontalSwipe.opacity,
           touchAction: "pan-y",
-          height: heightMode ? h.to((value) => `${Math.max(420, value)}px`) : undefined,
+          willChange: "transform, opacity",
         }}
         {...horizontalSwipe.bind()}
       >
@@ -1203,16 +1255,11 @@ function MobileBottomSheet({
           </div>
         </div>
         <div
-          className="overflow-y-auto overscroll-contain pr-0.5"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5"
           data-mobile-scroll="true"
           data-no-swipe="true"
-          style={{
-            maxHeight: expanded || heightMode
-              ? "calc(98.5dvh - 8rem - env(safe-area-inset-bottom))"
-              : "calc(90dvh - 8rem - env(safe-area-inset-bottom))",
-          }}
         >
-          {children}
+          <div ref={contentMeasureRef}>{children}</div>
         </div>
       </animated.section>
     </div>,
@@ -1989,8 +2036,13 @@ function MobileHomeCommandPanel({
       const absX = Math.abs(mx);
       const absY = Math.abs(my);
       const horizontalIntent = absX > 8 && absX > absY * 1.16;
+      const pageSwipeIntent = absX > viewportWidth() * 0.18 || (absX > 48 && vx > 0.5);
       if (active) {
         if (!horizontalIntent) return;
+        if (pageSwipeIntent) {
+          widgetApi.start({ widgetX: 0, immediate: true });
+          return;
+        }
         suppressWidgetClickRef.current = true;
         event.stopPropagation();
         if (event.cancelable) event.preventDefault();
@@ -2051,7 +2103,7 @@ function MobileHomeCommandPanel({
             key={activeWidget.key}
             type="button"
             className="mobile-smart-widget-button flex min-h-[76px] w-full items-center gap-3 rounded-[1.35rem] px-3.5 py-3 text-left"
-            data-no-swipe="true"
+            data-allow-page-swipe="true"
             style={{
               transform: widgetX.to((value) => `translate3d(${value}px,0,0)`),
             }}
@@ -2255,21 +2307,31 @@ function MobileCourseCard({
 function MobileCourses({
   onOpenCourse,
   onAddCourse,
+  initialScopeId,
+  initialYear,
 }: {
-  onOpenCourse: (courseId: string) => void;
+  onOpenCourse: (courseId: string, context?: MobileCourseReturnContext) => void;
   onAddCourse: (folderId?: string | null) => void;
+  initialScopeId?: string | null;
+  initialYear?: string | null;
 }) {
   const courses = useCourseStore((state) => state.courses);
   const folders = useCourseStore((state) => state.folders);
   const appMode = useCourseStore((state) => state.appMode ?? "custom");
+  const removeFolder = useCourseStore((state) => state.removeFolder);
   const [query, setQuery] = useState("");
-  const [activeYear, setActiveYear] = useState<string | null>(null);
-  const [activeScope, setActiveScope] = useState<string | null>(null);
+  const [activeYear, setActiveYear] = useState<string | null>(
+    initialYear ?? null
+  );
+  const [activeScope, setActiveScope] = useState<string | null>(
+    initialScopeId ?? null
+  );
   const [semesterSheet, setSemesterSheet] = useState<CourseFolder | null>(null);
   const [createSemesterSheet, setCreateSemesterSheet] = useState<{
     mode: "year" | "semester";
     year?: string;
   } | null>(null);
+  const restoreKeyRef = useRef("");
   const isCustomMode = appMode === "custom";
   const foldersById = useMemo(
     () =>
@@ -2295,6 +2357,14 @@ function MobileCourses({
     ],
     [sortedFolders]
   );
+
+  useEffect(() => {
+    const restoreKey = `${initialYear ?? ""}|${initialScopeId ?? ""}`;
+    if (restoreKey === "|" || restoreKey === restoreKeyRef.current) return;
+    restoreKeyRef.current = restoreKey;
+    setActiveYear(initialYear ?? null);
+    setActiveScope(initialScopeId ?? null);
+  }, [initialScopeId, initialYear]);
 
   const coursesForScope = (scopeId: string) =>
     courses
@@ -2413,7 +2483,12 @@ function MobileCourses({
                 key={course.id}
                 course={course}
                 folders={folders}
-                onOpen={() => onOpenCourse(course.id)}
+                onOpen={() =>
+                  onOpenCourse(course.id, {
+                    scopeId: activeScopeOption.id,
+                    year: activeScopeOption.folder?.year ?? activeYear,
+                  })
+                }
                 compact
               />
             ))}
@@ -2497,24 +2572,39 @@ function MobileCourses({
             {yearFolders.map((folder) => {
               const scopedCourses = coursesForScope(folder.id);
               return (
-                <button
+                <div
                   key={folder.id}
-                  type="button"
-                  className="mobile-accent-card min-h-[52px] rounded-[1rem] bg-white px-2.5 py-2 text-left active:scale-[0.99]"
+                  className="mobile-accent-card relative min-h-[52px] rounded-[1rem] bg-white p-0"
                   style={
                     {
                       "--card-accent": folder.color,
                     } as React.CSSProperties
                   }
-                  onClick={() => setActiveScope(folder.id)}
                 >
-                  <span className="block truncate text-sm font-black leading-tight text-slate-950">
-                    {folder.name}
-                  </span>
-                  <span className="mt-0.5 block text-[0.68rem] font-black text-slate-400">
-                    {scopedCourses.length} courses
-                  </span>
-                </button>
+                  <button
+                    type="button"
+                    className="block min-h-[52px] w-full rounded-[1rem] px-2.5 py-2 pr-10 text-left active:scale-[0.99]"
+                    onClick={() => setActiveScope(folder.id)}
+                  >
+                    <span className="block truncate text-sm font-black leading-tight text-slate-950">
+                      {folder.name}
+                    </span>
+                    <span className="mt-0.5 block text-[0.68rem] font-black text-slate-400">
+                      {scopedCourses.length} courses
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-xl border border-rose-100 bg-rose-50 text-rose-600 active:scale-[0.98]"
+                    onClick={() => {
+                      removeFolder(folder.id);
+                      if (activeScope === folder.id) setActiveScope(null);
+                    }}
+                    aria-label={`Delete ${folder.name}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -2594,7 +2684,14 @@ function MobileCourses({
                 key={course.id}
                 course={course}
                 folders={folders}
-                onOpen={() => onOpenCourse(course.id)}
+                onOpen={() => {
+                  const folder =
+                    course.folderId != null ? foldersById.get(course.folderId) ?? null : null;
+                  onOpenCourse(course.id, {
+                    scopeId: course.folderId ?? null,
+                    year: folder?.year ?? null,
+                  });
+                }}
               />
             ))}
             {searchResults.length === 0 && (
@@ -4902,6 +4999,7 @@ function MobileSettings() {
   const customThemeId = useCourseStore((state) => state.customThemeId ?? "classic");
   const setCustomTheme = useCourseStore((state) => state.setCustomTheme);
   const folders = useCourseStore((state) => state.folders);
+  const removeFolder = useCourseStore((state) => state.removeFolder);
   const [semesterSheet, setSemesterSheet] = useState<CourseFolder | null>(null);
   const [createSemesterSheet, setCreateSemesterSheet] = useState<{
     mode: "year" | "semester";
@@ -5143,27 +5241,42 @@ function MobileSettings() {
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-1.5">
                     {group.folders.map((folder) => (
-                      <button
+                      <div
                         key={folder.id}
-                        type="button"
-                        className="mobile-accent-card flex min-h-[44px] items-center gap-2 rounded-2xl bg-slate-50 px-2.5 py-1.5 text-left active:scale-[0.99]"
+                        className="mobile-accent-card relative min-h-[44px] rounded-2xl bg-slate-50 p-0"
                         style={
                           {
                             "--card-accent": folder.color,
                           } as React.CSSProperties
                         }
-                        onClick={() => setSemesterSheet(folder)}
                       >
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-black text-slate-950">
-                            {folder.name}
+                        <button
+                          type="button"
+                          className="flex min-h-[44px] w-full items-center gap-2 rounded-2xl px-2.5 py-1.5 pr-10 text-left active:scale-[0.99]"
+                          onClick={() => setSemesterSheet(folder)}
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-black text-slate-950">
+                              {folder.name}
+                            </span>
+                            <span className="block text-[0.65rem] font-bold text-slate-400">
+                              Edit
+                            </span>
                           </span>
-                          <span className="block text-[0.65rem] font-bold text-slate-400">
-                            Edit
-                          </span>
-                        </span>
-                        <Edit3 className="h-3.5 w-3.5 text-slate-400" />
-                      </button>
+                          <Edit3 className="h-3.5 w-3.5 text-slate-400" />
+                        </button>
+                        <button
+                          type="button"
+                          className="absolute right-1.5 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-xl border border-rose-100 bg-rose-50 text-rose-600 active:scale-[0.98]"
+                          onClick={() => {
+                            removeFolder(folder.id);
+                            if (semesterSheet?.id === folder.id) setSemesterSheet(null);
+                          }}
+                          aria-label={`Delete ${folder.name}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -5201,6 +5314,8 @@ export default function MobileApp() {
     null
   );
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const [courseReturnContext, setCourseReturnContext] =
+    useState<MobileCourseReturnContext | null>(null);
   const appMode = useCourseStore((state) => state.appMode ?? "custom");
   const folders = useCourseStore((state) => state.folders);
   const setAppMode = useCourseStore((state) => state.setAppMode);
@@ -5220,8 +5335,9 @@ export default function MobileApp() {
   const activeLabel =
     mobileTabs.find((tab) => tab.id === activeTab)?.label ?? "MarkMate";
 
-  const openCourse = (courseId: string) => {
+  const openCourse = (courseId: string, context?: MobileCourseReturnContext) => {
     setActiveTab("courses");
+    setCourseReturnContext(context ?? null);
     setSelectedCourseId(courseId);
   };
 
@@ -5231,10 +5347,12 @@ export default function MobileApp() {
   };
   const goToTab = (tab: MobileTab) => {
     setSelectedCourseId(null);
+    setCourseReturnContext(null);
     setActiveTab(tab);
   };
   const goToNextTab = () => {
     setSelectedCourseId(null);
+    setCourseReturnContext(null);
     setActiveTab((current) => {
       const index = mobileTabs.findIndex((tab) => tab.id === current);
       if (index < 0 || index >= mobileTabs.length - 1) return current;
@@ -5243,6 +5361,7 @@ export default function MobileApp() {
   };
   const goToPreviousTab = () => {
     setSelectedCourseId(null);
+    setCourseReturnContext(null);
     setActiveTab((current) => {
       const index = mobileTabs.findIndex((tab) => tab.id === current);
       if (index <= 0) return current;
@@ -5347,17 +5466,21 @@ export default function MobileApp() {
             onAddCourse={() => openCourseCreate()}
             onGoCalendar={() => {
               setSelectedCourseId(null);
+              setCourseReturnContext(null);
               setActiveTab("calendar");
             }}
             onGoCourses={() => {
               setSelectedCourseId(null);
+              setCourseReturnContext(null);
               setActiveTab("courses");
             }}
           />
         ) : activeTab === "courses" ? (
           <MobileCourses
-            onOpenCourse={setSelectedCourseId}
+            onOpenCourse={openCourse}
             onAddCourse={openCourseCreate}
+            initialScopeId={courseReturnContext?.scopeId ?? null}
+            initialYear={courseReturnContext?.year ?? null}
           />
         ) : activeTab === "calendar" ? (
           <MobileCalendar onOpenCourse={openCourse} />
@@ -5406,7 +5529,16 @@ export default function MobileApp() {
           setCourseCreateOpen(false);
           setCourseCreateFolderId(null);
         }}
-        onCreated={openCourse}
+        onCreated={(courseId) => {
+          const folder =
+            courseCreateFolderId != null
+              ? folders.find((item) => item.id === courseCreateFolderId) ?? null
+              : null;
+          openCourse(courseId, {
+            scopeId: courseCreateFolderId,
+            year: folder?.year ?? null,
+          });
+        }}
         initialFolderId={courseCreateFolderId}
       />
       <MobileCelebrationCenter />
