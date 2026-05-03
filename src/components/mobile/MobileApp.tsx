@@ -451,16 +451,16 @@ function blurActiveMobileControl() {
   if (active instanceof HTMLElement) active.blur();
 }
 
-function isInteractiveSwipeTarget(target: EventTarget | null) {
+function isSwipeBlockingTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   return Boolean(
     target.closest(
-      "input, textarea, select, button, a, [role='button'], [data-no-swipe='true']"
+      "input, textarea, select, a, [contenteditable='true'], [data-no-swipe='true'], [data-page-swipe-block='true']"
     )
   );
 }
 
-function isSwipeBlockingTarget(target: EventTarget | null) {
+function isSwipeExitBlockingTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   return Boolean(
     target.closest(
@@ -469,9 +469,18 @@ function isSwipeBlockingTarget(target: EventTarget | null) {
   );
 }
 
-const IOS_PAGE_SPRING = { tension: 720, friction: 46, mass: 0.66 };
-const IOS_SHEET_SPRING = { tension: 680, friction: 48, mass: 0.68 };
-const SWIPE_LOCK_MS = 110;
+const IOS_PAGE_SPRING = { tension: 1040, friction: 52, mass: 0.5 };
+const IOS_SHEET_SPRING = { tension: 900, friction: 54, mass: 0.54 };
+const SWIPE_LOCK_MS = 72;
+let pageSwipePausedUntil = 0;
+
+function pausePageSwipe(ms = 180) {
+  pageSwipePausedUntil = Math.max(pageSwipePausedUntil, Date.now() + ms);
+}
+
+function isPageSwipePaused() {
+  return Date.now() < pageSwipePausedUntil;
+}
 
 function viewportWidth() {
   return typeof window === "undefined" ? 390 : window.innerWidth;
@@ -505,6 +514,10 @@ function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
     onExitRef.current = onExit;
   }, [onExit]);
 
+  useEffect(() => {
+    if (!enabled) api.set({ x: 0, opacity: 1 });
+  }, [api, enabled]);
+
   const completeExit = (
     movementX: number,
     movementY: number,
@@ -515,14 +528,15 @@ function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
     const absX = Math.abs(movementX);
     const absY = Math.abs(movementY);
     const nextX = Math.max(0, movementX);
-    const horizontalIntent = absX > 10 && absX > absY * 1.18;
+    const horizontalIntent = absX > 7 && absX > absY * 1.1;
     const shouldComplete =
       horizontalIntent &&
       directionX > 0 &&
-      (nextX > viewportWidth() * 0.16 || (nextX > 26 && velocityX > 0.28));
+      (nextX > viewportWidth() * 0.115 || (nextX > 18 && velocityX > 0.2));
 
     if (shouldComplete) {
       lockRef.current = true;
+      pausePageSwipe();
       let committed = false;
       const commit = () => {
         if (committed) return;
@@ -535,13 +549,13 @@ function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
       api.start({
         x: viewportWidth(),
         opacity: 0.92,
-        config: { tension: 860, friction: 46, mass: 0.62 },
+        config: { tension: 1180, friction: 54, mass: 0.48 },
         onRest: () => {
           api.set({ x: 0, opacity: 1 });
           commit();
         },
       });
-      window.setTimeout(commit, 24);
+      window.setTimeout(commit, 8);
       return;
     }
 
@@ -561,14 +575,18 @@ function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
       xy: [pointerX],
     }) => {
       if (!enabled || lockRef.current) return;
-      if (first && isInteractiveSwipeTarget(event.target) && pointerX > 44) {
+      if (isPageSwipePaused()) {
+        api.start({ x: 0, opacity: 1, immediate: true });
+        return;
+      }
+      if (first && isSwipeExitBlockingTarget(event.target) && pointerX > 44) {
         cancel();
         return;
       }
 
       const absX = Math.abs(mx);
       const absY = Math.abs(my);
-      const horizontalIntent = absX > 10 && absX > absY * 1.18;
+      const horizontalIntent = absX > 7 && absX > absY * 1.1;
       const nextX = Math.max(0, mx);
 
       if (active) {
@@ -579,8 +597,8 @@ function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
         event.stopPropagation();
         if (event.cancelable) event.preventDefault();
         api.start({
-          x: Math.min(nextX, viewportWidth() * 0.42),
-          opacity: 1 - Math.min(nextX / viewportWidth(), 0.16),
+          x: Math.min(nextX, viewportWidth() * 0.68),
+          opacity: 1 - Math.min(nextX / viewportWidth(), 0.1),
           immediate: true,
         });
         return;
@@ -605,7 +623,8 @@ function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
         if (
           !enabled ||
           lockRef.current ||
-          (isInteractiveSwipeTarget(event.target) && event.clientX > 44)
+          isPageSwipePaused() ||
+          (isSwipeExitBlockingTarget(event.target) && event.clientX > 44)
         ) {
           fallbackStartRef.current = null;
           return;
@@ -619,26 +638,30 @@ function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
       },
       onPointerMoveCapture: (event: React.PointerEvent<HTMLElement>) => {
         const start = fallbackStartRef.current;
-        if (!enabled || !start?.active || lockRef.current) return;
+        if (!enabled || !start?.active || lockRef.current || isPageSwipePaused()) {
+          fallbackStartRef.current = null;
+          api.start({ x: 0, opacity: 1, immediate: true });
+          return;
+        }
         const mx = event.clientX - start.x;
         const my = event.clientY - start.y;
         const absX = Math.abs(mx);
         const absY = Math.abs(my);
         const nextX = Math.max(0, mx);
-        const horizontalIntent = absX > 10 && absX > absY * 1.18;
+        const horizontalIntent = absX > 7 && absX > absY * 1.1;
         if (!horizontalIntent || nextX <= 0) return;
         event.stopPropagation();
         if (event.cancelable) event.preventDefault();
         api.start({
-          x: Math.min(nextX, viewportWidth() * 0.42),
-          opacity: 1 - Math.min(nextX / viewportWidth(), 0.16),
+          x: Math.min(nextX, viewportWidth() * 0.68),
+          opacity: 1 - Math.min(nextX / viewportWidth(), 0.1),
           immediate: true,
         });
       },
       onPointerUpCapture: (event: React.PointerEvent<HTMLElement>) => {
         const start = fallbackStartRef.current;
         fallbackStartRef.current = null;
-        if (!enabled || !start?.active || lockRef.current) return;
+        if (!enabled || !start?.active || lockRef.current || isPageSwipePaused()) return;
         const mx = event.clientX - start.x;
         const my = event.clientY - start.y;
         const velocityX = Math.abs(mx) / Math.max(Date.now() - start.time, 1);
@@ -685,6 +708,10 @@ function useHorizontalSwipeNavigation(
     onPreviousRef.current = onPrevious;
   }, [onNext, onPrevious]);
 
+  useEffect(() => {
+    if (!enabled) api.set({ x: 0, opacity: 1 });
+  }, [api, enabled]);
+
   const bind = useDrag(
     ({
       active,
@@ -697,6 +724,10 @@ function useHorizontalSwipeNavigation(
       velocity: [vx],
     }) => {
       if (!enabled || lockRef.current) return;
+      if (isPageSwipePaused()) {
+        api.start({ x: 0, opacity: 1, immediate: true });
+        return;
+      }
       if (
         first &&
         isSwipeBlockingTarget(event.target) &&
@@ -708,10 +739,10 @@ function useHorizontalSwipeNavigation(
 
       const absX = Math.abs(mx);
       const absY = Math.abs(my);
-      const horizontalIntent = absX > 10 && absX > absY * 1.18;
+      const horizontalIntent = absX > 7 && absX > absY * 1.1;
       const clampedX = Math.max(
-        -viewportWidth() * 0.28,
-        Math.min(viewportWidth() * 0.28, mx)
+        -viewportWidth() * 0.5,
+        Math.min(viewportWidth() * 0.5, mx)
       );
 
       if (active) {
@@ -719,12 +750,12 @@ function useHorizontalSwipeNavigation(
           api.start({ x: 0, opacity: 1, immediate: true });
           return;
         }
-        clickBlockUntilRef.current = Date.now() + 320;
+        clickBlockUntilRef.current = Date.now() + 220;
         event.stopPropagation();
         if (event.cancelable) event.preventDefault();
         api.start({
           x: clampedX,
-          opacity: 1 - Math.min(absX / viewportWidth(), 0.14),
+          opacity: 1 - Math.min(absX / viewportWidth(), 0.09),
           immediate: true,
         });
         return;
@@ -734,11 +765,11 @@ function useHorizontalSwipeNavigation(
 
       const shouldMove =
         horizontalIntent &&
-        (absX > viewportWidth() * 0.13 || (absX > 24 && vx > 0.26));
+        (absX > viewportWidth() * 0.095 || (absX > 18 && vx > 0.18));
 
       if (shouldMove) {
         lockRef.current = true;
-        clickBlockUntilRef.current = Date.now() + 420;
+        clickBlockUntilRef.current = Date.now() + 260;
         let committed = false;
         const commit = () => {
           if (committed) return;
@@ -749,17 +780,17 @@ function useHorizontalSwipeNavigation(
             lockRef.current = false;
           }, SWIPE_LOCK_MS);
         };
-        const leavingX = dirX < 0 ? -viewportWidth() * 0.38 : viewportWidth() * 0.38;
+        const leavingX = dirX < 0 ? -viewportWidth() * 0.52 : viewportWidth() * 0.52;
         api.start({
           x: leavingX,
           opacity: 0.88,
-          config: { tension: 860, friction: 48, mass: 0.62 },
+          config: { tension: 1180, friction: 56, mass: 0.48 },
           onRest: () => {
             commit();
             api.set({ x: 0, opacity: 1 });
           },
         });
-        window.setTimeout(commit, 24);
+        window.setTimeout(commit, 8);
         return;
       }
 
@@ -780,16 +811,20 @@ function useHorizontalSwipeNavigation(
     directionX: number
   ) => {
     if (!enabled || lockRef.current) return;
+    if (isPageSwipePaused()) {
+      api.start({ x: 0, opacity: 1, config: IOS_PAGE_SPRING });
+      return;
+    }
     const absX = Math.abs(movementX);
     const absY = Math.abs(movementY);
-    const horizontalIntent = absX > 10 && absX > absY * 1.18;
+    const horizontalIntent = absX > 7 && absX > absY * 1.1;
     const shouldMove =
       horizontalIntent &&
-      (absX > viewportWidth() * 0.13 || (absX > 24 && velocityX > 0.26));
+      (absX > viewportWidth() * 0.095 || (absX > 18 && velocityX > 0.18));
 
     if (shouldMove) {
       lockRef.current = true;
-      clickBlockUntilRef.current = Date.now() + 420;
+      clickBlockUntilRef.current = Date.now() + 260;
       let committed = false;
       const commit = () => {
         if (committed) return;
@@ -801,17 +836,17 @@ function useHorizontalSwipeNavigation(
         }, SWIPE_LOCK_MS);
       };
       const leavingX =
-        directionX < 0 ? -viewportWidth() * 0.38 : viewportWidth() * 0.38;
+        directionX < 0 ? -viewportWidth() * 0.52 : viewportWidth() * 0.52;
       api.start({
         x: leavingX,
         opacity: 0.88,
-        config: { tension: 860, friction: 48, mass: 0.62 },
+        config: { tension: 1180, friction: 56, mass: 0.48 },
         onRest: () => {
           commit();
           api.set({ x: 0, opacity: 1 });
         },
       });
-      window.setTimeout(commit, 24);
+      window.setTimeout(commit, 8);
       return;
     }
 
@@ -845,29 +880,33 @@ function useHorizontalSwipeNavigation(
       },
       onPointerMoveCapture: (event: React.PointerEvent<HTMLElement>) => {
         const start = fallbackStartRef.current;
-        if (!enabled || !start?.active || lockRef.current) return;
+        if (!enabled || !start?.active || lockRef.current || isPageSwipePaused()) {
+          fallbackStartRef.current = null;
+          api.start({ x: 0, opacity: 1, immediate: true });
+          return;
+        }
         const mx = event.clientX - start.x;
         const my = event.clientY - start.y;
         const absX = Math.abs(mx);
         const absY = Math.abs(my);
-        const horizontalIntent = absX > 10 && absX > absY * 1.18;
+        const horizontalIntent = absX > 7 && absX > absY * 1.1;
         if (!horizontalIntent) return;
-        clickBlockUntilRef.current = Date.now() + 320;
+        clickBlockUntilRef.current = Date.now() + 220;
         event.stopPropagation();
         if (event.cancelable) event.preventDefault();
         api.start({
           x: Math.max(
-            -viewportWidth() * 0.28,
-            Math.min(viewportWidth() * 0.28, mx)
+            -viewportWidth() * 0.5,
+            Math.min(viewportWidth() * 0.5, mx)
           ),
-          opacity: 1 - Math.min(absX / viewportWidth(), 0.14),
+          opacity: 1 - Math.min(absX / viewportWidth(), 0.09),
           immediate: true,
         });
       },
       onPointerUpCapture: (event: React.PointerEvent<HTMLElement>) => {
         const start = fallbackStartRef.current;
         fallbackStartRef.current = null;
-        if (!enabled || !start?.active || lockRef.current) return;
+        if (!enabled || !start?.active || lockRef.current || isPageSwipePaused()) return;
         const mx = event.clientX - start.x;
         const my = event.clientY - start.y;
         const velocityX = Math.abs(mx) / Math.max(Date.now() - start.time, 1);
@@ -1155,25 +1194,25 @@ function MobileBottomSheet({
       }
 
       const dismissSlack = expandedRef.current
-        ? Math.min(286, fullHeight * 0.34)
-        : Math.min(170, fullHeight * 0.22);
+        ? Math.min(330, fullHeight * 0.4)
+        : Math.min(220, fullHeight * 0.28);
       const shouldDismiss =
         nextY > collapsedOffset + dismissSlack ||
         (!expandedRef.current &&
           dirY > 0 &&
-          vy > 0.86 &&
-          nextY > collapsedOffset + 56) ||
+          vy > 1.05 &&
+          nextY > collapsedOffset + 74) ||
         (expandedRef.current &&
           dirY > 0 &&
-          vy > 1.16 &&
-          nextY > collapsedOffset + 126);
+          vy > 1.32 &&
+          nextY > collapsedOffset + 148);
       const shouldExpand =
-        nextY < collapsedOffset - Math.min(126, fullHeight * 0.18) ||
-        (dirY < 0 && vy > 0.32);
+        nextY < collapsedOffset - Math.min(82, fullHeight * 0.12) ||
+        (dirY < 0 && vy > 0.22);
       const shouldCollapse =
         expandedRef.current &&
-        (nextY > Math.min(fullHeight * 0.25, collapsedOffset * 0.72) ||
-          (dirY > 0 && vy > 0.38));
+        (nextY > Math.min(fullHeight * 0.34, collapsedOffset * 0.9) ||
+          (dirY > 0 && vy > 0.52));
 
       if (shouldDismiss) {
         closeFromDrag();
@@ -1231,12 +1270,12 @@ function MobileBottomSheet({
       >
         <button
           type="button"
-          className="mx-auto mb-4 block h-5 w-16 touch-none rounded-full focus:outline-none"
+          className="mobile-sheet-handle mx-auto mb-3 block h-8 w-36 max-w-[46vw] touch-none rounded-full focus:outline-none"
           aria-label={expanded ? "Collapse sheet" : "Expand sheet"}
           data-no-swipe="true"
           {...handleDrag()}
         >
-          <span className="mx-auto block h-1.5 w-12 rounded-full bg-slate-200" />
+          <span className="mobile-sheet-handle-groove mx-auto block h-full w-full rounded-full" />
         </button>
         <div className="mb-5 flex items-center justify-between gap-3">
           <h2 className="text-xl font-black tracking-tight text-slate-950">
@@ -2035,14 +2074,9 @@ function MobileHomeCommandPanel({
       if (widgets.length <= 1) return;
       const absX = Math.abs(mx);
       const absY = Math.abs(my);
-      const horizontalIntent = absX > 8 && absX > absY * 1.16;
-      const pageSwipeIntent = absX > viewportWidth() * 0.18 || (absX > 48 && vx > 0.5);
+      const horizontalIntent = absX > 6 && absX > absY * 1.08;
       if (active) {
         if (!horizontalIntent) return;
-        if (pageSwipeIntent) {
-          widgetApi.start({ widgetX: 0, immediate: true });
-          return;
-        }
         suppressWidgetClickRef.current = true;
         event.stopPropagation();
         if (event.cancelable) event.preventDefault();
@@ -2053,7 +2087,7 @@ function MobileHomeCommandPanel({
         return;
       }
 
-      const shouldMove = horizontalIntent && (absX > 42 || (absX > 28 && vx > 0.38));
+      const shouldMove = horizontalIntent && (absX > 28 || (absX > 18 && vx > 0.24));
       if (shouldMove) {
         moveWidget(dirX < 0 ? "next" : "previous");
         widgetApi.start({
@@ -2103,7 +2137,7 @@ function MobileHomeCommandPanel({
             key={activeWidget.key}
             type="button"
             className="mobile-smart-widget-button flex min-h-[76px] w-full items-center gap-3 rounded-[1.35rem] px-3.5 py-3 text-left"
-            data-allow-page-swipe="true"
+            data-page-swipe-block="true"
             style={{
               transform: widgetX.to((value) => `translate3d(${value}px,0,0)`),
             }}
@@ -2307,11 +2341,13 @@ function MobileCourseCard({
 function MobileCourses({
   onOpenCourse,
   onAddCourse,
+  onNestedViewChange,
   initialScopeId,
   initialYear,
 }: {
   onOpenCourse: (courseId: string, context?: MobileCourseReturnContext) => void;
   onAddCourse: (folderId?: string | null) => void;
+  onNestedViewChange?: (active: boolean) => void;
   initialScopeId?: string | null;
   initialYear?: string | null;
 }) {
@@ -2380,12 +2416,18 @@ function MobileCourses({
   const activeScopeOption = activeScope
     ? folderOptions.find((option) => option.id === activeScope)
     : null;
+
+  useEffect(() => {
+    onNestedViewChange?.(Boolean(activeScopeOption || (isCustomMode && activeYear)));
+    return () => onNestedViewChange?.(false);
+  }, [activeScopeOption, activeYear, isCustomMode, onNestedViewChange]);
+
   const closeSemester = () => setActiveScope(null);
   const semesterSwipeHandlers = useHorizontalSwipeExit(closeSemester, Boolean(activeScopeOption));
   const closeYear = () => setActiveYear(null);
   const yearSwipeHandlers = useHorizontalSwipeExit(
     closeYear,
-    Boolean(activeYear)
+    Boolean(activeYear) && !activeScopeOption
   );
   const deleteYearAndClose = (year: string) => {
     removeCustomYear(year);
@@ -2417,7 +2459,9 @@ function MobileCourses({
 
     return (
       <animated.div
-        className="-mx-5 space-y-3 px-5"
+        key="mobile-semester-detail"
+        className="-mx-5 min-h-[calc(100dvh-8rem)] space-y-3 px-5"
+        data-page-swipe-block="true"
         style={semesterSwipeHandlers.style}
         {...semesterSwipeHandlers.bind()}
       >
@@ -2508,7 +2552,9 @@ function MobileCourses({
 
     return (
       <animated.div
-        className="-mx-5 space-y-2.5 px-5"
+        key="mobile-year-detail"
+        className="-mx-5 min-h-[calc(100dvh-8rem)] space-y-2.5 px-5"
+        data-page-swipe-block="true"
         style={yearSwipeHandlers.style}
         {...yearSwipeHandlers.bind()}
       >
@@ -2831,7 +2877,7 @@ function MobileCourseCreateSheet({
 }: {
   open: boolean;
   onClose: () => void;
-  onCreated: (courseId: string) => void;
+  onCreated: (courseId: string, folderId?: string | null) => void;
   initialFolderId?: string | null;
 }) {
   const folders = useCourseStore((state) => state.folders);
@@ -2865,7 +2911,7 @@ function MobileCourseCreateSheet({
         : null;
     const courseId = addCourse(liveName.trim() || "New Course", liveFolderId);
     onClose();
-    onCreated(courseId);
+    onCreated(courseId, liveFolderId);
     window.setTimeout(() => {
       submitLockRef.current = false;
     }, 500);
@@ -3711,7 +3757,9 @@ function MobileCourseDetail({
 
   return (
     <animated.div
+      key="mobile-course-detail"
       className="-mx-5 min-h-[100dvh] space-y-3 px-5"
+      data-page-swipe-block="true"
       style={courseSwipeHandlers.style}
       {...courseSwipeHandlers.bind()}
     >
@@ -5314,6 +5362,7 @@ export default function MobileApp() {
     null
   );
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+  const [coursesNestedOpen, setCoursesNestedOpen] = useState(false);
   const [courseReturnContext, setCourseReturnContext] =
     useState<MobileCourseReturnContext | null>(null);
   const appMode = useCourseStore((state) => state.appMode ?? "custom");
@@ -5335,9 +5384,26 @@ export default function MobileApp() {
   const activeLabel =
     mobileTabs.find((tab) => tab.id === activeTab)?.label ?? "MarkMate";
 
+  const courseContextFromId = (
+    courseId: string,
+    explicitContext?: MobileCourseReturnContext
+  ): MobileCourseReturnContext | null => {
+    if (explicitContext !== undefined) return explicitContext;
+    const course = useCourseStore.getState().courses.find((item) => item.id === courseId);
+    if (!course) return null;
+    const folder =
+      course.folderId != null
+        ? useCourseStore.getState().folders.find((item) => item.id === course.folderId) ?? null
+        : null;
+    return {
+      scopeId: course.folderId ?? "unfiled",
+      year: folder?.year ?? null,
+    };
+  };
+
   const openCourse = (courseId: string, context?: MobileCourseReturnContext) => {
     setActiveTab("courses");
-    setCourseReturnContext(context ?? null);
+    setCourseReturnContext(courseContextFromId(courseId, context));
     setSelectedCourseId(courseId);
   };
 
@@ -5348,11 +5414,13 @@ export default function MobileApp() {
   const goToTab = (tab: MobileTab) => {
     setSelectedCourseId(null);
     setCourseReturnContext(null);
+    setCoursesNestedOpen(false);
     setActiveTab(tab);
   };
   const goToNextTab = () => {
     setSelectedCourseId(null);
     setCourseReturnContext(null);
+    setCoursesNestedOpen(false);
     setActiveTab((current) => {
       const index = mobileTabs.findIndex((tab) => tab.id === current);
       if (index < 0 || index >= mobileTabs.length - 1) return current;
@@ -5362,6 +5430,7 @@ export default function MobileApp() {
   const goToPreviousTab = () => {
     setSelectedCourseId(null);
     setCourseReturnContext(null);
+    setCoursesNestedOpen(false);
     setActiveTab((current) => {
       const index = mobileTabs.findIndex((tab) => tab.id === current);
       if (index <= 0) return current;
@@ -5371,7 +5440,10 @@ export default function MobileApp() {
   const tabSwipeHandlers = useHorizontalSwipeNavigation(
     goToNextTab,
     goToPreviousTab,
-    !showCourseDetail && !courseCreateOpen && !gpaOpen
+    !showCourseDetail &&
+      !courseCreateOpen &&
+      !gpaOpen &&
+      !(activeTab === "courses" && coursesNestedOpen)
   );
 
   const hasUniversitySemesterLayout = useMemo(
@@ -5467,11 +5539,13 @@ export default function MobileApp() {
             onGoCalendar={() => {
               setSelectedCourseId(null);
               setCourseReturnContext(null);
+              setCoursesNestedOpen(false);
               setActiveTab("calendar");
             }}
             onGoCourses={() => {
               setSelectedCourseId(null);
               setCourseReturnContext(null);
+              setCoursesNestedOpen(false);
               setActiveTab("courses");
             }}
           />
@@ -5479,6 +5553,7 @@ export default function MobileApp() {
           <MobileCourses
             onOpenCourse={openCourse}
             onAddCourse={openCourseCreate}
+            onNestedViewChange={setCoursesNestedOpen}
             initialScopeId={courseReturnContext?.scopeId ?? null}
             initialYear={courseReturnContext?.year ?? null}
           />
@@ -5529,13 +5604,13 @@ export default function MobileApp() {
           setCourseCreateOpen(false);
           setCourseCreateFolderId(null);
         }}
-        onCreated={(courseId) => {
+        onCreated={(courseId, createdFolderId) => {
           const folder =
-            courseCreateFolderId != null
-              ? folders.find((item) => item.id === courseCreateFolderId) ?? null
+            createdFolderId != null
+              ? folders.find((item) => item.id === createdFolderId) ?? null
               : null;
           openCourse(courseId, {
-            scopeId: courseCreateFolderId,
+            scopeId: createdFolderId ?? "unfiled",
             year: folder?.year ?? null,
           });
         }}
