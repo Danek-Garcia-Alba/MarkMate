@@ -1103,6 +1103,7 @@ function MobileBottomSheet({
   const dragStartYRef = useRef(0);
   const collapsedOffsetRef = useRef(0);
   const expandedRef = useRef(false);
+  const tapBlockUntilRef = useRef(0);
   const [{ y }, sheetApi] = useSpring(() => ({
     y: viewportHeight(),
     config: IOS_SHEET_SPRING,
@@ -1166,6 +1167,25 @@ function MobileBottomSheet({
     });
   };
 
+  const settleSheet = (nextExpanded: boolean) => {
+    const collapsedOffset = measureCollapsedOffset();
+    collapsedOffsetRef.current = collapsedOffset;
+    setExpanded(nextExpanded);
+    expandedRef.current = nextExpanded;
+    sheetApi.start({
+      y: nextExpanded ? 0 : collapsedOffset,
+      config: IOS_SHEET_SPRING,
+    });
+  };
+
+  const toggleSheetSize = (blockFollowUpClick = false) => {
+    if (Date.now() < tapBlockUntilRef.current || closeLockRef.current) return;
+    if (blockFollowUpClick) {
+      tapBlockUntilRef.current = Date.now() + 260;
+    }
+    settleSheet(!expandedRef.current);
+  };
+
   const handleDrag = useDrag(
     ({
       active,
@@ -1173,6 +1193,7 @@ function MobileBottomSheet({
       event,
       first,
       movement: [, my],
+      tap,
       velocity: [, vy],
     }) => {
       event.stopPropagation();
@@ -1187,6 +1208,13 @@ function MobileBottomSheet({
       const collapsedOffset = collapsedOffsetRef.current || measureCollapsedOffset();
       const dismissOffset = viewportHeight();
       const nextY = Math.max(0, Math.min(dismissOffset, dragStartYRef.current + my));
+      if (!active && tap) {
+        toggleSheetSize(true);
+        return;
+      }
+      if (Math.abs(my) > 4) {
+        tapBlockUntilRef.current = Date.now() + 240;
+      }
 
       if (active) {
         sheetApi.start({ y: nextY, immediate: true });
@@ -1220,19 +1248,15 @@ function MobileBottomSheet({
       }
 
       if (shouldExpand && !shouldCollapse) {
-        setExpanded(true);
-        expandedRef.current = true;
-        sheetApi.start({ y: 0, config: IOS_SHEET_SPRING });
+        settleSheet(true);
         return;
       }
 
-      setExpanded(false);
-      expandedRef.current = false;
-      sheetApi.start({ y: collapsedOffset, config: IOS_SHEET_SPRING });
+      settleSheet(false);
     },
     {
       axis: "y",
-      filterTaps: true,
+      filterTaps: false,
       eventOptions: { passive: false },
     }
   );
@@ -1268,15 +1292,6 @@ function MobileBottomSheet({
         }}
         {...horizontalSwipe.bind()}
       >
-        <button
-          type="button"
-          className="mobile-sheet-handle mx-auto mb-3 block h-8 w-36 max-w-[46vw] touch-none rounded-full focus:outline-none"
-          aria-label={expanded ? "Collapse sheet" : "Expand sheet"}
-          data-no-swipe="true"
-          {...handleDrag()}
-        >
-          <span className="mobile-sheet-handle-groove mx-auto block h-full w-full rounded-full" />
-        </button>
         <div className="mb-5 flex items-center justify-between gap-3">
           <h2 className="text-xl font-black tracking-tight text-slate-950">
             {title}
@@ -1301,6 +1316,36 @@ function MobileBottomSheet({
           <div ref={contentMeasureRef}>{children}</div>
         </div>
       </animated.section>
+      <animated.button
+        type="button"
+        className={`mobile-sheet-thumb-toggle ${
+          expanded ? "is-expanded" : ""
+        }`}
+        aria-label={
+          expanded
+            ? "Return sheet to default height"
+            : "Expand sheet to full screen"
+        }
+        data-no-swipe="true"
+        onClick={(event) => {
+          event.stopPropagation();
+          toggleSheetSize();
+        }}
+        style={{
+          top: expanded
+            ? "clamp(31rem, 74dvh, calc(100dvh - 6.5rem))"
+            : "clamp(27rem, 66dvh, calc(100dvh - 9rem))",
+          transform: horizontalSwipe.x.to(
+            (xValue) => `translate3d(calc(-50% + ${xValue}px),0,0)`
+          ),
+          opacity: horizontalSwipe.opacity,
+        }}
+        {...handleDrag()}
+      >
+        <span className="mobile-sheet-handle block h-9 w-40 rounded-full">
+          <span className="mobile-sheet-handle-groove mx-auto block h-full w-full rounded-full" />
+        </span>
+      </animated.button>
     </div>,
     document.body
   );
