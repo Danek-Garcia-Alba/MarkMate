@@ -1,5 +1,7 @@
 node_modules/
 dist/
+out/
+public/remotion-captures/
 *.tsbuildinfo
 vite-dev.*.log
 .pnpm-debug.log

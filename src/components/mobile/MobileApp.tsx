@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useDrag } from "@use-gesture/react";
+import { animated, to as springTo, useSpring } from "@react-spring/web";
 import {
   ArrowLeft,
   BookOpen,
@@ -405,93 +407,186 @@ function blurActiveMobileControl() {
 function isInteractiveSwipeTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   return Boolean(
-    target.closest("input, textarea, select, button, a, [role='button']")
+    target.closest(
+      "input, textarea, select, button, a, [role='button'], [data-no-swipe='true']"
+    )
   );
 }
 
-function swipeTouchPoint(
-  event: React.TouchEvent<HTMLElement>,
-  source: "touches" | "changedTouches"
-) {
-  const touchList = source === "touches" ? event.touches : event.changedTouches;
-  const touch = touchList.item(0);
-  return touch ? { x: touch.clientX, y: touch.clientY } : null;
+const IOS_PAGE_SPRING = { tension: 420, friction: 36, mass: 0.86 };
+const IOS_SHEET_SPRING = { tension: 390, friction: 34, mass: 0.9 };
+const SWIPE_LOCK_MS = 260;
+
+function viewportWidth() {
+  return typeof window === "undefined" ? 390 : window.innerWidth;
+}
+
+function viewportHeight() {
+  return typeof window === "undefined" ? 844 : window.innerHeight;
 }
 
 function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
-  const startRef = useRef<{
+  const onExitRef = useRef(onExit);
+  const lockRef = useRef(false);
+  const fallbackStartRef = useRef<{
     x: number;
     y: number;
-    active: boolean;
-    swiping: boolean;
     time: number;
+    active: boolean;
   } | null>(null);
+  const [{ x, opacity }, api] = useSpring(() => ({
+    x: 0,
+    opacity: 1,
+    config: IOS_PAGE_SPRING,
+  }));
 
-  const completeSwipe = (x: number, y: number) => {
-    const start = startRef.current;
-    startRef.current = null;
-    if (!enabled || !start?.active) return;
-    const dx = x - start.x;
-    const dy = y - start.y;
-    const absX = Math.abs(dx);
-    const velocity = absX / Math.max(Date.now() - start.time, 1);
-    if (
-      dx > 0 &&
-      (absX > 56 || (absX > 36 && velocity > 0.55)) &&
-      absX > Math.abs(dy) * 1.35
-    ) {
-      onExit();
+  useEffect(() => {
+    onExitRef.current = onExit;
+  }, [onExit]);
+
+  const completeExit = (
+    movementX: number,
+    movementY: number,
+    velocityX: number,
+    directionX: number
+  ) => {
+    if (!enabled || lockRef.current) return;
+    const absX = Math.abs(movementX);
+    const absY = Math.abs(movementY);
+    const nextX = Math.max(0, movementX);
+    const horizontalIntent = absX > 10 && absX > absY * 1.18;
+    const shouldComplete =
+      horizontalIntent &&
+      directionX > 0 &&
+      (nextX > viewportWidth() * 0.22 || (nextX > 34 && velocityX > 0.45));
+
+    if (shouldComplete) {
+      lockRef.current = true;
+      api.start({
+        x: viewportWidth(),
+        opacity: 0.92,
+        config: { tension: 520, friction: 42, mass: 0.82 },
+        onRest: () => {
+          api.set({ x: 0, opacity: 1 });
+          onExitRef.current();
+          window.setTimeout(() => {
+            lockRef.current = false;
+          }, SWIPE_LOCK_MS);
+        },
+      });
+      return;
     }
+
+    api.start({ x: 0, opacity: 1, config: IOS_PAGE_SPRING });
   };
 
-  return {
-    onPointerDown: (event: React.PointerEvent<HTMLElement>) => {
-      if (event.pointerType === "touch") return;
-      if (!enabled || isInteractiveSwipeTarget(event.target)) return;
-      startRef.current = {
-        x: event.clientX,
-        y: event.clientY,
-        active: true,
-        swiping: false,
-        time: Date.now(),
-      };
-    },
-    onPointerUp: (event: React.PointerEvent<HTMLElement>) => {
-      if (event.pointerType === "touch") return;
-      completeSwipe(event.clientX, event.clientY);
-    },
-    onPointerCancel: () => {
-      startRef.current = null;
-    },
-    onTouchStart: (event: React.TouchEvent<HTMLElement>) => {
-      if (!enabled || isInteractiveSwipeTarget(event.target)) return;
-      const point = swipeTouchPoint(event, "touches");
-      if (!point) return;
-      startRef.current = {
-        ...point,
-        active: true,
-        swiping: false,
-        time: Date.now(),
-      };
-    },
-    onTouchMove: (event: React.TouchEvent<HTMLElement>) => {
-      const start = startRef.current;
-      const point = swipeTouchPoint(event, "touches");
-      if (!enabled || !start?.active || !point) return;
-      const dx = point.x - start.x;
-      const dy = point.y - start.y;
-      if (Math.abs(dx) > 18 && Math.abs(dx) > Math.abs(dy) * 1.2) {
-        start.swiping = true;
-        if (event.cancelable) event.preventDefault();
-      }
-    },
-    onTouchEnd: (event: React.TouchEvent<HTMLElement>) => {
-      const point = swipeTouchPoint(event, "changedTouches");
-      if (!point) {
-        startRef.current = null;
+  const bind = useDrag(
+    ({
+      active,
+      cancel,
+      direction: [dirX],
+      event,
+      first,
+      last,
+      movement: [mx, my],
+      velocity: [vx],
+      xy: [pointerX],
+    }) => {
+      if (!enabled || lockRef.current) return;
+      if (first && isInteractiveSwipeTarget(event.target) && pointerX > 44) {
+        cancel();
         return;
       }
-      completeSwipe(point.x, point.y);
+
+      const absX = Math.abs(mx);
+      const absY = Math.abs(my);
+      const horizontalIntent = absX > 10 && absX > absY * 1.18;
+      const nextX = Math.max(0, mx);
+
+      if (active) {
+        if (!horizontalIntent) {
+          api.start({ x: 0, opacity: 1, immediate: true });
+          return;
+        }
+        event.stopPropagation();
+        if (event.cancelable) event.preventDefault();
+        api.start({
+          x: Math.min(nextX, viewportWidth() * 0.42),
+          opacity: 1 - Math.min(nextX / viewportWidth(), 0.16),
+          immediate: true,
+        });
+        return;
+      }
+
+      if (!last) return;
+
+      completeExit(mx, my, vx, dirX);
+    },
+    {
+      enabled,
+      axis: "x",
+      filterTaps: true,
+      eventOptions: { passive: false },
+    }
+  );
+
+  return {
+    bind: () => ({
+      ...(typeof bind === "function" ? bind() : {}),
+      onPointerDownCapture: (event: React.PointerEvent<HTMLElement>) => {
+        if (
+          !enabled ||
+          lockRef.current ||
+          (isInteractiveSwipeTarget(event.target) && event.clientX > 44)
+        ) {
+          fallbackStartRef.current = null;
+          return;
+        }
+        fallbackStartRef.current = {
+          x: event.clientX,
+          y: event.clientY,
+          time: Date.now(),
+          active: true,
+        };
+      },
+      onPointerMoveCapture: (event: React.PointerEvent<HTMLElement>) => {
+        const start = fallbackStartRef.current;
+        if (!enabled || !start?.active || lockRef.current) return;
+        const mx = event.clientX - start.x;
+        const my = event.clientY - start.y;
+        const absX = Math.abs(mx);
+        const absY = Math.abs(my);
+        const nextX = Math.max(0, mx);
+        const horizontalIntent = absX > 10 && absX > absY * 1.18;
+        if (!horizontalIntent || nextX <= 0) return;
+        event.stopPropagation();
+        if (event.cancelable) event.preventDefault();
+        api.start({
+          x: Math.min(nextX, viewportWidth() * 0.42),
+          opacity: 1 - Math.min(nextX / viewportWidth(), 0.16),
+          immediate: true,
+        });
+      },
+      onPointerUpCapture: (event: React.PointerEvent<HTMLElement>) => {
+        const start = fallbackStartRef.current;
+        fallbackStartRef.current = null;
+        if (!enabled || !start?.active || lockRef.current) return;
+        const mx = event.clientX - start.x;
+        const my = event.clientY - start.y;
+        const velocityX = Math.abs(mx) / Math.max(Date.now() - start.time, 1);
+        completeExit(mx, my, velocityX, Math.sign(mx) || 1);
+      },
+      onPointerCancelCapture: () => {
+        fallbackStartRef.current = null;
+        api.start({ x: 0, opacity: 1, config: IOS_PAGE_SPRING });
+      },
+    }),
+    x,
+    opacity,
+    style: {
+      transform: x.to((value) => `translate3d(${value}px,0,0)`),
+      opacity,
+      touchAction: "pan-y",
     },
   };
 }
@@ -501,83 +596,191 @@ function useHorizontalSwipeNavigation(
   onPrevious: () => void,
   enabled = true
 ) {
-  const startRef = useRef<{
+  const onNextRef = useRef(onNext);
+  const onPreviousRef = useRef(onPrevious);
+  const lockRef = useRef(false);
+  const fallbackStartRef = useRef<{
     x: number;
     y: number;
-    active: boolean;
-    swiping: boolean;
     time: number;
+    active: boolean;
   } | null>(null);
+  const [{ x, opacity }, api] = useSpring(() => ({
+    x: 0,
+    opacity: 1,
+    config: IOS_PAGE_SPRING,
+  }));
 
-  const completeSwipe = (x: number, y: number) => {
-    const start = startRef.current;
-    startRef.current = null;
-    if (!enabled || !start?.active) return;
-    const dx = x - start.x;
-    const dy = y - start.y;
-    const absX = Math.abs(dx);
-    const velocity = absX / Math.max(Date.now() - start.time, 1);
-    if (
-      (absX <= 56 && !(absX > 36 && velocity > 0.55)) ||
-      absX <= Math.abs(dy) * 1.35
-    ) {
+  useEffect(() => {
+    onNextRef.current = onNext;
+    onPreviousRef.current = onPrevious;
+  }, [onNext, onPrevious]);
+
+  const bind = useDrag(
+    ({
+      active,
+      cancel,
+      direction: [dirX],
+      event,
+      first,
+      last,
+      movement: [mx, my],
+      velocity: [vx],
+    }) => {
+      if (!enabled || lockRef.current) return;
+      if (first && isInteractiveSwipeTarget(event.target)) {
+        cancel();
+        return;
+      }
+
+      const absX = Math.abs(mx);
+      const absY = Math.abs(my);
+      const horizontalIntent = absX > 10 && absX > absY * 1.18;
+      const clampedX = Math.max(
+        -viewportWidth() * 0.28,
+        Math.min(viewportWidth() * 0.28, mx)
+      );
+
+      if (active) {
+        if (!horizontalIntent) {
+          api.start({ x: 0, opacity: 1, immediate: true });
+          return;
+        }
+        event.stopPropagation();
+        if (event.cancelable) event.preventDefault();
+        api.start({
+          x: clampedX,
+          opacity: 1 - Math.min(absX / viewportWidth(), 0.14),
+          immediate: true,
+        });
+        return;
+      }
+
+      if (!last) return;
+
+      const shouldMove =
+        horizontalIntent &&
+        (absX > viewportWidth() * 0.2 || (absX > 34 && vx > 0.42));
+
+      if (shouldMove) {
+        lockRef.current = true;
+        const leavingX = dirX < 0 ? -viewportWidth() * 0.34 : viewportWidth() * 0.34;
+        api.start({
+          x: leavingX,
+          opacity: 0.88,
+          config: { tension: 500, friction: 40, mass: 0.82 },
+          onRest: () => {
+            if (dirX < 0) onNextRef.current();
+            else onPreviousRef.current();
+            api.set({ x: 0, opacity: 1 });
+            window.setTimeout(() => {
+              lockRef.current = false;
+            }, SWIPE_LOCK_MS);
+          },
+        });
+        return;
+      }
+
+      api.start({ x: 0, opacity: 1, config: IOS_PAGE_SPRING });
+    },
+    {
+      enabled,
+      axis: "x",
+      filterTaps: true,
+      eventOptions: { passive: false },
+    }
+  );
+
+  const completeNavigation = (
+    movementX: number,
+    movementY: number,
+    velocityX: number,
+    directionX: number
+  ) => {
+    if (!enabled || lockRef.current) return;
+    const absX = Math.abs(movementX);
+    const absY = Math.abs(movementY);
+    const horizontalIntent = absX > 10 && absX > absY * 1.18;
+    const shouldMove =
+      horizontalIntent &&
+      (absX > viewportWidth() * 0.2 || (absX > 34 && velocityX > 0.42));
+
+    if (shouldMove) {
+      lockRef.current = true;
+      const leavingX =
+        directionX < 0 ? -viewportWidth() * 0.34 : viewportWidth() * 0.34;
+      api.start({
+        x: leavingX,
+        opacity: 0.88,
+        config: { tension: 500, friction: 40, mass: 0.82 },
+        onRest: () => {
+          if (directionX < 0) onNextRef.current();
+          else onPreviousRef.current();
+          api.set({ x: 0, opacity: 1 });
+          window.setTimeout(() => {
+            lockRef.current = false;
+          }, SWIPE_LOCK_MS);
+        },
+      });
       return;
     }
-    if (dx < 0) {
-      onNext();
-    } else {
-      onPrevious();
-    }
+
+    api.start({ x: 0, opacity: 1, config: IOS_PAGE_SPRING });
   };
 
   return {
-    onPointerDown: (event: React.PointerEvent<HTMLElement>) => {
-      if (event.pointerType === "touch") return;
-      if (!enabled || isInteractiveSwipeTarget(event.target)) return;
-      startRef.current = {
-        x: event.clientX,
-        y: event.clientY,
-        active: true,
-        swiping: false,
-        time: Date.now(),
-      };
-    },
-    onPointerUp: (event: React.PointerEvent<HTMLElement>) => {
-      if (event.pointerType === "touch") return;
-      completeSwipe(event.clientX, event.clientY);
-    },
-    onPointerCancel: () => {
-      startRef.current = null;
-    },
-    onTouchStart: (event: React.TouchEvent<HTMLElement>) => {
-      if (!enabled || isInteractiveSwipeTarget(event.target)) return;
-      const point = swipeTouchPoint(event, "touches");
-      if (!point) return;
-      startRef.current = {
-        ...point,
-        active: true,
-        swiping: false,
-        time: Date.now(),
-      };
-    },
-    onTouchMove: (event: React.TouchEvent<HTMLElement>) => {
-      const start = startRef.current;
-      const point = swipeTouchPoint(event, "touches");
-      if (!enabled || !start?.active || !point) return;
-      const dx = point.x - start.x;
-      const dy = point.y - start.y;
-      if (Math.abs(dx) > 18 && Math.abs(dx) > Math.abs(dy) * 1.2) {
-        start.swiping = true;
+    bind: () => ({
+      ...(typeof bind === "function" ? bind() : {}),
+      onPointerDownCapture: (event: React.PointerEvent<HTMLElement>) => {
+        if (!enabled || lockRef.current || isInteractiveSwipeTarget(event.target)) {
+          fallbackStartRef.current = null;
+          return;
+        }
+        fallbackStartRef.current = {
+          x: event.clientX,
+          y: event.clientY,
+          time: Date.now(),
+          active: true,
+        };
+      },
+      onPointerMoveCapture: (event: React.PointerEvent<HTMLElement>) => {
+        const start = fallbackStartRef.current;
+        if (!enabled || !start?.active || lockRef.current) return;
+        const mx = event.clientX - start.x;
+        const my = event.clientY - start.y;
+        const absX = Math.abs(mx);
+        const absY = Math.abs(my);
+        const horizontalIntent = absX > 10 && absX > absY * 1.18;
+        if (!horizontalIntent) return;
+        event.stopPropagation();
         if (event.cancelable) event.preventDefault();
-      }
-    },
-    onTouchEnd: (event: React.TouchEvent<HTMLElement>) => {
-      const point = swipeTouchPoint(event, "changedTouches");
-      if (!point) {
-        startRef.current = null;
-        return;
-      }
-      completeSwipe(point.x, point.y);
+        api.start({
+          x: Math.max(
+            -viewportWidth() * 0.28,
+            Math.min(viewportWidth() * 0.28, mx)
+          ),
+          opacity: 1 - Math.min(absX / viewportWidth(), 0.14),
+          immediate: true,
+        });
+      },
+      onPointerUpCapture: (event: React.PointerEvent<HTMLElement>) => {
+        const start = fallbackStartRef.current;
+        fallbackStartRef.current = null;
+        if (!enabled || !start?.active || lockRef.current) return;
+        const mx = event.clientX - start.x;
+        const my = event.clientY - start.y;
+        const velocityX = Math.abs(mx) / Math.max(Date.now() - start.time, 1);
+        completeNavigation(mx, my, velocityX, Math.sign(mx) || 1);
+      },
+      onPointerCancelCapture: () => {
+        fallbackStartRef.current = null;
+        api.start({ x: 0, opacity: 1, config: IOS_PAGE_SPRING });
+      },
+    }),
+    style: {
+      transform: x.to((value) => `translate3d(${value}px,0,0)`),
+      opacity,
+      touchAction: "pan-y",
     },
   };
 }
@@ -753,7 +956,71 @@ function MobileBottomSheet({
   action?: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const sheetSwipeHandlers = useHorizontalSwipeExit(onClose, open);
+  const horizontalSwipe = useHorizontalSwipeExit(onClose, open);
+  const [expanded, setExpanded] = useState(false);
+  const [{ y }, sheetApi] = useSpring(() => ({
+    y: 0,
+    config: IOS_SHEET_SPRING,
+  }));
+  const closeLockRef = useRef(false);
+
+  useEffect(() => {
+    if (!open) return;
+    closeLockRef.current = false;
+    setExpanded(false);
+    sheetApi.set({ y: 0 });
+  }, [open, sheetApi]);
+
+  const closeFromDrag = () => {
+    if (closeLockRef.current) return;
+    closeLockRef.current = true;
+    onClose();
+    window.setTimeout(() => {
+      closeLockRef.current = false;
+    }, SWIPE_LOCK_MS);
+  };
+
+  const handleDrag = useDrag(
+    ({
+      active,
+      direction: [, dirY],
+      event,
+      movement: [, my],
+      velocity: [, vy],
+    }) => {
+      event.stopPropagation();
+      if (event.cancelable) event.preventDefault();
+
+      const baseY = expanded ? -24 : 0;
+      const nextY = Math.max(-80, Math.min(viewportHeight() * 0.7, baseY + my));
+
+      if (active) {
+        sheetApi.start({ y: nextY, immediate: true });
+        return;
+      }
+
+      const shouldDismiss = nextY > 112 || (dirY > 0 && vy > 0.58);
+      const shouldExpand = nextY < -36 || (dirY < 0 && vy > 0.36);
+
+      if (shouldDismiss) {
+        sheetApi.start({
+          y: viewportHeight(),
+          config: { tension: 420, friction: 38, mass: 0.9 },
+          onRest: closeFromDrag,
+        });
+        return;
+      }
+
+      setExpanded(shouldExpand || (expanded && nextY < 72));
+      sheetApi.start({ y: 0, config: IOS_SHEET_SPRING });
+    },
+    {
+      axis: "y",
+      filterTaps: true,
+      eventOptions: { passive: false },
+    }
+  );
+
   if (!open || typeof document === "undefined") return null;
 
   return createPortal(
@@ -768,38 +1035,32 @@ function MobileBottomSheet({
         aria-label="Close sheet"
         onClick={onClose}
       />
-      <section
-        className="absolute inset-x-0 bottom-0 max-h-[94dvh] overflow-y-auto overscroll-contain rounded-t-[2rem] border border-white/70 bg-white px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-4 shadow-2xl"
+      <animated.section
+        className={`absolute inset-x-0 bottom-0 overflow-hidden rounded-t-[2rem] border border-white/70 bg-white px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-4 shadow-2xl ${
+          expanded ? "max-h-[98dvh]" : "max-h-[90dvh]"
+        }`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        style={{ touchAction: "pan-y" }}
-        onPointerDown={(event) => {
-          event.stopPropagation();
-          sheetSwipeHandlers.onPointerDown(event);
+        style={{
+          transform: springTo(
+            [horizontalSwipe.x, y],
+            (xValue, yValue) => `translate3d(${xValue}px,${yValue}px,0)`
+          ),
+          opacity: horizontalSwipe.opacity,
+          touchAction: "pan-y",
         }}
-        onPointerUp={(event) => {
-          event.stopPropagation();
-          sheetSwipeHandlers.onPointerUp(event);
-        }}
-        onPointerCancel={(event) => {
-          event.stopPropagation();
-          sheetSwipeHandlers.onPointerCancel();
-        }}
-        onTouchStart={(event) => {
-          event.stopPropagation();
-          sheetSwipeHandlers.onTouchStart(event);
-        }}
-        onTouchMove={(event) => {
-          event.stopPropagation();
-          sheetSwipeHandlers.onTouchMove(event);
-        }}
-        onTouchEnd={(event) => {
-          event.stopPropagation();
-          sheetSwipeHandlers.onTouchEnd(event);
-        }}
+        {...horizontalSwipe.bind()}
       >
-        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-slate-200" />
+        <button
+          type="button"
+          className="mx-auto mb-4 block h-5 w-16 touch-none rounded-full focus:outline-none"
+          aria-label={expanded ? "Collapse sheet" : "Expand sheet"}
+          data-no-swipe="true"
+          {...handleDrag()}
+        >
+          <span className="mx-auto block h-1.5 w-12 rounded-full bg-slate-200" />
+        </button>
         <div className="mb-5 flex items-center justify-between gap-3">
           <h2 className="text-xl font-black tracking-tight text-slate-950">
             {title}
@@ -816,8 +1077,19 @@ function MobileBottomSheet({
             </button>
           </div>
         </div>
-        {children}
-      </section>
+        <div
+          className="overflow-y-auto overscroll-contain pr-0.5"
+          data-mobile-scroll="true"
+          data-no-swipe="true"
+          style={{
+            maxHeight: expanded
+              ? "calc(98dvh - 8rem - env(safe-area-inset-bottom))"
+              : "calc(90dvh - 8rem - env(safe-area-inset-bottom))",
+          }}
+        >
+          {children}
+        </div>
+      </animated.section>
     </div>,
     document.body
   );
@@ -1074,6 +1346,33 @@ function courseWeightStatus(totalWeights: number) {
   };
 }
 
+function mobileEffectiveGrade(assignment: Assignment): number | null {
+  if (assignment.grade == null) return null;
+  const penalty = assignment.late ? assignment.latePenalty ?? 10 : 0;
+  return clampPercent(assignment.grade - penalty);
+}
+
+function maxPossibleCourseGrade(course: Course) {
+  const weightedAssignments = course.assignments.filter(
+    (assignment) => normalizeWeightToPercent(assignment.weight) > 0
+  );
+  if (weightedAssignments.length === 0) return null;
+
+  const usedWeight = weightedAssignments.reduce(
+    (sum, assignment) => sum + normalizeWeightToPercent(assignment.weight),
+    0
+  );
+  const projectedEarned = weightedAssignments.reduce((sum, assignment) => {
+    const weight = normalizeWeightToPercent(assignment.weight);
+    const grade = mobileEffectiveGrade(assignment);
+    return sum + (weight * (grade ?? 100)) / 100;
+  }, 0);
+  const openWeight = Math.max(0, 100 - usedWeight);
+  const denominator = usedWeight > 100 ? usedWeight : 100;
+
+  return clampPercent(((projectedEarned + openWeight) / denominator) * 100);
+}
+
 function MobileProgressRing({
   value,
   label,
@@ -1158,6 +1457,7 @@ function MobileCourseProgressPanel({
   const completeAssignments = course.assignments.filter(
     (assignment) => assignment.status === "completed"
   ).length;
+  const maxPossible = maxPossibleCourseGrade(course);
 
   return (
     <section className="rounded-[1.45rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
@@ -1199,6 +1499,19 @@ function MobileCourseProgressPanel({
           detail={weightStatus.detail}
           tone={weightStatus.tone}
         />
+      </div>
+      <div className="mobile-max-possible mt-2 flex min-h-10 items-center justify-between gap-3 rounded-2xl px-3 py-2">
+        <span className="min-w-0">
+          <span className="block text-[0.62rem] font-black uppercase tracking-wide text-white/60">
+            Max possible
+          </span>
+          <span className="block truncate text-[0.72rem] font-bold text-white/72">
+            Remaining work at 100%
+          </span>
+        </span>
+        <span className="shrink-0 text-lg font-black tabular-nums text-white">
+          {formatPercent(maxPossible)}
+        </span>
       </div>
       <button
         type="button"
@@ -1420,7 +1733,7 @@ function MobileIdentityCard({
             </div>
           </div>
           <div
-            className="min-h-32 rounded-[1.45rem] border border-white/20 bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]"
+            className="pointer-events-none min-h-32 rounded-[1.45rem] border border-white/20 bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]"
             style={{
               backgroundImage: campusBubbleLayer,
               backgroundPosition: activeTheme.backgroundImage
@@ -1469,8 +1782,11 @@ function MobileHomeCommandPanel({
   const [widgetDirection, setWidgetDirection] = useState<"next" | "previous">(
     "next"
   );
-  const widgetTouchStartRef = useRef<{ x: number; y: number } | null>(null);
   const suppressWidgetClickRef = useRef(false);
+  const [{ widgetX }, widgetApi] = useSpring(() => ({
+    widgetX: 0,
+    config: IOS_PAGE_SPRING,
+  }));
   const recentCourse = recentCourses[0];
   const recentMetrics = recentCourse ? calcMetrics(recentCourse) : null;
   const widgets = useMemo(() => {
@@ -1559,38 +1875,49 @@ function MobileHomeCommandPanel({
   }, [widgets.length]);
 
   const activeWidget = widgets[widgetIndex % widgets.length] ?? widgets[0];
-  const handleWidgetTouchStart = (event: React.TouchEvent<HTMLButtonElement>) => {
-    const point = swipeTouchPoint(event, "touches");
-    if (!point) return;
-    widgetTouchStartRef.current = point;
-  };
-  const handleWidgetTouchMove = (event: React.TouchEvent<HTMLButtonElement>) => {
-    const start = widgetTouchStartRef.current;
-    const point = swipeTouchPoint(event, "touches");
-    if (!start || !point) return;
-    const dx = point.x - start.x;
-    const dy = point.y - start.y;
-    if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.2) {
-      suppressWidgetClickRef.current = true;
-      if (event.cancelable) event.preventDefault();
-    }
-  };
-  const handleWidgetTouchEnd = (event: React.TouchEvent<HTMLButtonElement>) => {
-    const start = widgetTouchStartRef.current;
-    widgetTouchStartRef.current = null;
-    if (!start) return;
-    const point = swipeTouchPoint(event, "changedTouches");
-    if (!point) return;
-    const dx = point.x - start.x;
-    const dy = point.y - start.y;
-    if (Math.abs(dx) > 42 && Math.abs(dx) > Math.abs(dy) * 1.25) {
-      suppressWidgetClickRef.current = true;
-      moveWidget(dx < 0 ? "next" : "previous");
+  const widgetBind = useDrag(
+    ({
+      active,
+      direction: [dirX],
+      event,
+      movement: [mx, my],
+      velocity: [vx],
+    }) => {
+      if (widgets.length <= 1) return;
+      const absX = Math.abs(mx);
+      const absY = Math.abs(my);
+      const horizontalIntent = absX > 8 && absX > absY * 1.16;
+      if (active) {
+        if (!horizontalIntent) return;
+        suppressWidgetClickRef.current = true;
+        event.stopPropagation();
+        if (event.cancelable) event.preventDefault();
+        widgetApi.start({
+          widgetX: Math.max(-72, Math.min(72, mx)),
+          immediate: true,
+        });
+        return;
+      }
+
+      const shouldMove = horizontalIntent && (absX > 42 || (absX > 28 && vx > 0.38));
+      if (shouldMove) {
+        moveWidget(dirX < 0 ? "next" : "previous");
+        widgetApi.start({
+          widgetX: dirX < 0 ? -22 : 22,
+          immediate: true,
+        });
+      }
+      widgetApi.start({ widgetX: 0, config: IOS_PAGE_SPRING });
       window.setTimeout(() => {
         suppressWidgetClickRef.current = false;
       }, 220);
+    },
+    {
+      axis: "x",
+      filterTaps: true,
+      eventOptions: { passive: false },
     }
-  };
+  );
 
   return (
     <section className="rounded-[1.75rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
@@ -1618,10 +1945,14 @@ function MobileHomeCommandPanel({
 
       {activeWidget && (
         <div className="mobile-smart-widget mt-3 rounded-[1.45rem] p-[1px] text-white">
-          <button
+          <animated.button
             key={activeWidget.key}
             type="button"
             className="mobile-smart-widget-button flex min-h-[76px] w-full items-center gap-3 rounded-[1.35rem] px-3.5 py-3 text-left"
+            data-no-swipe="true"
+            style={{
+              transform: widgetX.to((value) => `translate3d(${value}px,0,0)`),
+            }}
             onClick={() => {
               if (suppressWidgetClickRef.current) {
                 suppressWidgetClickRef.current = false;
@@ -1629,12 +1960,7 @@ function MobileHomeCommandPanel({
               }
               activeWidget.onClick();
             }}
-            onTouchStart={handleWidgetTouchStart}
-            onTouchMove={handleWidgetTouchMove}
-            onTouchEnd={handleWidgetTouchEnd}
-            onTouchCancel={() => {
-              widgetTouchStartRef.current = null;
-            }}
+            {...widgetBind()}
           >
             <span
               className={`mobile-widget-copy mobile-widget-copy-${widgetDirection} flex min-w-0 flex-1 items-center gap-3`}
@@ -1654,7 +1980,7 @@ function MobileHomeCommandPanel({
                 </span>
               </span>
             </span>
-          </button>
+          </animated.button>
         </div>
       )}
 
@@ -1884,6 +2210,10 @@ function MobileCourses({
     : null;
   const closeSemester = () => setActiveScope(null);
   const semesterSwipeHandlers = useHorizontalSwipeExit(closeSemester, Boolean(activeScopeOption));
+  const yearSwipeHandlers = useHorizontalSwipeExit(
+    () => setActiveYear(null),
+    Boolean(activeYear)
+  );
 
   const searchResults = courses
     .filter((course) => {
@@ -1909,10 +2239,10 @@ function MobileCourses({
         : activeScopeOption.id;
 
     return (
-      <div
+      <animated.div
         className="space-y-3"
-        style={{ touchAction: "pan-y" }}
-        {...semesterSwipeHandlers}
+        style={semesterSwipeHandlers.style}
+        {...semesterSwipeHandlers.bind()}
       >
         <section className="rounded-[1.65rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
           <div className="flex items-center gap-3">
@@ -1982,7 +2312,7 @@ function MobileCourses({
             ))}
           </div>
         )}
-      </div>
+      </animated.div>
     );
   }
 
@@ -1995,7 +2325,11 @@ function MobileCourses({
     );
 
     return (
-      <div className="space-y-2.5">
+      <animated.div
+        className="space-y-2.5"
+        style={yearSwipeHandlers.style}
+        {...yearSwipeHandlers.bind()}
+      >
         <section className="rounded-[1.5rem] border border-white/70 bg-white/95 p-2.5 shadow-soft backdrop-blur">
           <div className="flex items-center gap-3">
             <button
@@ -2080,7 +2414,7 @@ function MobileCourses({
           createMode={createSemesterSheet?.mode}
           initialYear={createSemesterSheet?.year}
         />
-      </div>
+      </animated.div>
     );
   }
 
@@ -2960,33 +3294,50 @@ function MobilePassHelperSheet({
     setTargetDraft("50");
   }, [course, open]);
 
+  const assignmentRows = useMemo(
+    () => course.assignments.slice().sort(assignmentSort),
+    [course.assignments]
+  );
+  const selectedWeight = assignmentRows.reduce(
+    (sum, assignment) =>
+      selectedIds.has(assignment.id)
+        ? sum + normalizeWeightToPercent(assignment.weight)
+        : sum,
+    0
+  );
+
   return (
     <MobileBottomSheet title="Need to pass" open={open} onClose={onClose}>
-      <div className="space-y-3">
-        <section className="rounded-3xl bg-slate-950 p-4 text-white">
-          <div className="grid grid-cols-[1fr_6.5rem] gap-3">
+      <div className="space-y-2.5">
+        <section className="mobile-pass-summary rounded-[1.45rem] p-3 text-white">
+          <div className="grid grid-cols-[1fr_5.6rem] gap-2.5">
             <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-white/50">
+              <p className="text-[0.64rem] font-black uppercase tracking-[0.18em] text-white/55">
                 Target
               </p>
-              <p className="mt-2 text-base font-bold leading-snug text-white/68">
-                Select unfinished work.
+              <p className="mt-1 text-sm font-bold leading-snug text-white/72">
+                Pick the work that is still flexible.
+              </p>
+              <p className="mt-1 text-[0.68rem] font-black uppercase tracking-wide text-white/45">
+                {selectedIds.size} selected / {formatPercent(selectedWeight)} weight
               </p>
             </div>
-            <label className="block text-xs font-black uppercase tracking-wide text-white/45">
+            <label className="block text-[0.64rem] font-black uppercase tracking-wide text-white/45">
               Final
               <input
-                className="mt-2 min-h-12 w-full rounded-2xl border border-white/10 bg-white px-3 text-center text-xl font-black text-slate-950 outline-none focus:ring-2 focus:ring-white/25"
+                className="mt-1.5 min-h-11 w-full rounded-2xl border border-white/10 bg-white px-3 text-center text-lg font-black text-slate-950 outline-none focus:ring-2 focus:ring-white/25"
                 inputMode="decimal"
                 value={targetDraft}
                 onChange={(event) => setTargetDraft(event.target.value)}
+                onKeyDown={blurMobileInputOnEnter}
+                onBlur={settleMobileInputAfterBlur}
                 placeholder="50"
               />
             </label>
           </div>
           {weightsReady && result && (
             <div
-              className={`mt-3 rounded-2xl px-4 py-3 text-base font-black leading-snug ${
+              className={`mt-2.5 rounded-2xl px-3 py-2 text-sm font-black leading-snug ${
                 result.alreadySafe || result.possible
                   ? "bg-emerald-400/14 text-emerald-100"
                   : "bg-rose-400/14 text-rose-100"
@@ -3000,30 +3351,38 @@ function MobilePassHelperSheet({
             </div>
           )}
           {weightsReady && !result && (
-            <p className="mt-3 rounded-2xl bg-white/8 px-4 py-3 text-sm font-bold text-white/65">
+            <p className="mt-2.5 rounded-2xl bg-white/8 px-3 py-2 text-sm font-bold text-white/65">
               Select at least one assignment.
             </p>
           )}
         </section>
 
         {!weightsReady && (
-          <p className="rounded-2xl bg-amber-50 p-4 text-base font-bold leading-relaxed text-amber-800">
+          <p className="rounded-2xl bg-amber-50 p-3 text-sm font-bold leading-relaxed text-amber-800">
             This calculator needs the course weights to total 100%. Right now
             they total {formatPercent(metrics.totalWeights)}.
           </p>
         )}
 
-        <div className="max-h-[38dvh] space-y-2 overflow-y-auto overscroll-contain pr-1">
-          {course.assignments.map((assignment) => {
+        <div className="rounded-[1.45rem] border border-slate-200 bg-white p-2">
+          <div className="grid grid-cols-[1.45rem_minmax(5rem,1fr)_3.2rem_3.2rem] gap-1 px-1 pb-1 text-[0.58rem] font-black uppercase tracking-wide text-slate-400">
+            <span />
+            <span>Assignment</span>
+            <span className="text-right">Weight</span>
+            <span className="text-right">Grade</span>
+          </div>
+          <div className="max-h-[46dvh] space-y-1 overflow-y-auto overscroll-contain pr-1">
+          {assignmentRows.map((assignment) => {
             const active = selectedIds.has(assignment.id);
+            const effective = mobileEffectiveGrade(assignment);
             return (
               <button
                 key={assignment.id}
                 type="button"
-                className={`flex min-h-[58px] w-full items-center gap-3 rounded-2xl border px-3 py-2 text-left active:scale-[0.99] ${
+                className={`grid min-h-[42px] w-full grid-cols-[1.45rem_minmax(5rem,1fr)_3.2rem_3.2rem] items-center gap-1 rounded-xl border px-1.5 py-1.5 text-left active:scale-[0.99] ${
                   active
                     ? "border-slate-950 bg-slate-950 text-white"
-                    : "border-slate-200 bg-white text-slate-900"
+                    : "border-slate-100 bg-slate-50 text-slate-900"
                 }`}
                 onClick={() =>
                   setSelectedIds((current) => {
@@ -3035,30 +3394,41 @@ function MobilePassHelperSheet({
                 }
                 >
                 <span
-                  className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border ${
+                  className={`grid h-6 w-6 place-items-center rounded-full border ${
                     active
                       ? "border-white/50 bg-white/15"
                       : "border-slate-200 bg-slate-50"
                   }`}
                 >
-                  {active && <Check className="h-4 w-4" />}
+                  {active && <Check className="h-3.5 w-3.5" />}
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-base font-black">
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-black leading-tight">
                     {assignment.title}
                   </span>
                   <span
-                    className={`mt-0.5 block text-sm font-semibold ${
+                    className={`mt-0.5 block truncate text-[0.64rem] font-semibold ${
                       active ? "text-white/60" : "text-slate-500"
                     }`}
                   >
-                    {formatPercent(normalizeWeightToPercent(assignment.weight))} weight
-                    / grade {assignment.grade == null ? "--" : formatPercent(assignment.grade)}
+                    {statusLabel(assignment.status)}
                   </span>
+                </span>
+                <span className="text-right text-xs font-black tabular-nums">
+                  {formatPercent(normalizeWeightToPercent(assignment.weight))}
+                </span>
+                <span className="text-right text-xs font-black tabular-nums">
+                  {effective == null ? "--" : formatPercent(effective)}
                 </span>
               </button>
             );
           })}
+          {assignmentRows.length === 0 && (
+            <p className="rounded-2xl border border-dashed border-slate-200 px-3 py-5 text-center text-sm font-bold text-slate-500">
+              Add assignments first, then this helper can plan the pass mark.
+            </p>
+          )}
+          </div>
         </div>
       </div>
     </MobileBottomSheet>
@@ -3115,10 +3485,10 @@ function MobileCourseDetail({
   )}`;
 
   return (
-    <div
+    <animated.div
       className="min-h-[100dvh] space-y-3"
-      style={{ touchAction: "pan-y" }}
-      {...courseSwipeHandlers}
+      style={courseSwipeHandlers.style}
+      {...courseSwipeHandlers.bind()}
     >
       <header className="sticky top-[calc(env(safe-area-inset-top)+0.5rem)] z-10 -mx-1 rounded-[1.65rem] border border-white/70 bg-white/92 p-2.5 shadow-soft backdrop-blur">
         <div className="flex items-center gap-3">
@@ -3291,7 +3661,7 @@ function MobileCourseDetail({
         defaultCreditLabel={defaultCreditLabel}
         onDeleted={onBack}
       />
-    </div>
+    </animated.div>
   );
 }
 
@@ -4157,6 +4527,33 @@ function MobileCourseSetupSheet({
   );
 }
 
+function MobileInstallDemoVideo() {
+  return (
+    <div className="mobile-install-demo mt-3 rounded-[1.45rem] p-[1px]">
+      <div className="relative overflow-hidden rounded-[1.38rem] bg-slate-950">
+        <video
+          className="block aspect-[9/14] w-full object-cover"
+          src="/remotion-assets/markmate-install-demo.mp4"
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          aria-label="Install MarkMate on iPhone demo"
+        />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/72 to-transparent px-3 pb-3 pt-8">
+          <p className="text-[0.64rem] font-black uppercase tracking-[0.18em] text-white/55">
+            iPhone install
+          </p>
+          <p className="mt-0.5 text-sm font-black text-white">
+            Share, Add to Home Screen, open like an app.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MobileSettings() {
   const appMode = useCourseStore((state) => state.appMode ?? "custom");
   const universityThemeId = useCourseStore(
@@ -4176,15 +4573,15 @@ function MobileSettings() {
   const likelyIOS = useMemo(() => isLikelyIOSDevice(), []);
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+    <div className="space-y-3">
+      <section className="rounded-[1.55rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
         <p className="text-xs font-black uppercase tracking-wide text-slate-500">
           Settings
         </p>
-        <h1 className="mt-1 text-2xl font-black tracking-tight">
+        <h1 className="mt-0.5 text-xl font-black tracking-tight">
           School and setup
         </h1>
-        <div className="mt-5 grid grid-cols-2 gap-3 rounded-3xl bg-slate-100 p-1.5">
+        <div className="mt-3 grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1">
           {[
             { id: "custom", label: "Custom" },
             { id: "university", label: "University" },
@@ -4194,7 +4591,7 @@ function MobileSettings() {
               <button
                 key={option.id}
                 type="button"
-                className={`min-h-12 rounded-2xl text-base font-black ${
+                className={`min-h-10 rounded-xl text-sm font-black ${
                   active ? "bg-white text-slate-950 shadow-soft" : "text-slate-500"
                 }`}
                 onClick={() =>
@@ -4208,19 +4605,19 @@ function MobileSettings() {
         </div>
       </section>
 
-      <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+      <section className="rounded-[1.55rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
         <div className="flex items-start gap-3">
-          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-slate-950 text-white">
+          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-slate-950 text-white">
             <Smartphone className="h-5 w-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+            <p className="text-[0.68rem] font-black uppercase tracking-wide text-slate-500">
               iPhone app mode
             </p>
-            <h2 className="mt-1 text-xl font-black tracking-tight">
+            <h2 className="mt-0.5 text-lg font-black tracking-tight">
               {standalone ? "Installed on this device" : "Add to Home Screen"}
             </h2>
-            <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-500">
+            <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-500">
               {standalone
                 ? "MarkMate is running in standalone mode with the browser chrome tucked away."
                 : likelyIOS
@@ -4230,49 +4627,30 @@ function MobileSettings() {
           </div>
         </div>
         {standalone ? (
-          <div className="mt-4 flex items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700">
+          <div className="mt-3 flex items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-700">
             <CheckCircle2 className="h-5 w-5" />
             App mode is active
           </div>
         ) : (
-          <div className="mt-4 grid gap-2">
-            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-              <Share2 className="h-5 w-5 shrink-0 text-slate-400" />
-              <p className="text-sm font-bold text-slate-600">
-                In Safari, tap Share.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-              <Plus className="h-5 w-5 shrink-0 text-slate-400" />
-              <p className="text-sm font-bold text-slate-600">
-                Choose Add to Home Screen.
-              </p>
-            </div>
-            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-              <Check className="h-5 w-5 shrink-0 text-slate-400" />
-              <p className="text-sm font-bold text-slate-600">
-                Open MarkMate from the new icon.
-              </p>
-            </div>
-          </div>
+          <MobileInstallDemoVideo />
         )}
       </section>
 
       {appMode === "university" ? (
         <>
-          <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
-            <div className="mb-4 flex items-center gap-3">
-              <GraduationCap className="h-6 w-6 text-slate-400" />
-              <h2 className="text-2xl font-black tracking-tight">University</h2>
+          <section className="rounded-[1.55rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
+            <div className="mb-3 flex items-center gap-2">
+              <GraduationCap className="h-5 w-5 text-slate-400" />
+              <h2 className="text-lg font-black tracking-tight">University</h2>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               {universityOptions.map((option) => {
                 const active = universityThemeId === option.id;
                 return (
                   <button
                     key={option.id}
                     type="button"
-                    className={`min-h-14 rounded-2xl border px-3 text-base font-black ${
+                    className={`min-h-11 rounded-2xl border px-3 text-sm font-black ${
                       active
                         ? "border-slate-950 bg-slate-950 text-white"
                         : "border-slate-200 bg-white text-slate-700"
@@ -4285,20 +4663,20 @@ function MobileSettings() {
               })}
             </div>
           </section>
-          <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+          <section className="rounded-[1.55rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
+            <p className="text-[0.68rem] font-black uppercase tracking-wide text-slate-500">
               Semesters
             </p>
-            <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
               {folders.map((folder) => (
                 <div
                   key={folder.id}
-                  className="rounded-2xl border border-slate-200 bg-white px-3 py-3"
+                  className="rounded-2xl border border-slate-200 bg-white px-2 py-2"
                 >
-                  <p className="text-xs font-black text-slate-400">
+                  <p className="text-[0.62rem] font-black text-slate-400">
                     {folder.year}
                   </p>
-                  <p className="mt-1 text-sm font-black text-slate-800">
+                  <p className="mt-0.5 text-xs font-black text-slate-800">
                     {folder.name}
                   </p>
                 </div>
@@ -4308,12 +4686,12 @@ function MobileSettings() {
         </>
       ) : (
         <>
-          <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
-            <div className="mb-4 flex items-center gap-3">
-              <Sparkles className="h-6 w-6 text-slate-400" />
-              <h2 className="text-2xl font-black tracking-tight">Slates</h2>
+          <section className="rounded-[1.55rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
+            <div className="mb-3 flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-slate-400" />
+              <h2 className="text-lg font-black tracking-tight">Slates</h2>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               {customThemeOptions.map((option) => {
                 const active = customThemeId === option.id;
                 const preview = customSlatePreview(option.id);
@@ -4321,7 +4699,7 @@ function MobileSettings() {
                   <button
                     key={option.id}
                     type="button"
-                    className={`min-h-[4.6rem] rounded-2xl border p-3 text-left active:scale-[0.99] ${
+                    className={`min-h-[4rem] rounded-2xl border p-2.5 text-left active:scale-[0.99] ${
                       active
                         ? "border-slate-950 text-slate-950 shadow-soft"
                         : "border-slate-200 text-slate-700"
@@ -4342,7 +4720,7 @@ function MobileSettings() {
                         style={{ backgroundColor: preview.accent }}
                       />
                     </span>
-                    <span className="mt-2 block text-sm font-black leading-tight">
+                    <span className="mt-1.5 block text-xs font-black leading-tight">
                       {option.label}
                     </span>
                     {active && (
@@ -4355,30 +4733,30 @@ function MobileSettings() {
               })}
             </div>
           </section>
-          <section className="rounded-[2rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+          <section className="rounded-[1.55rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                <p className="text-[0.68rem] font-black uppercase tracking-wide text-slate-500">
                   Structure
                 </p>
-                <h2 className="text-xl font-black tracking-tight">
+                <h2 className="text-lg font-black tracking-tight">
                   Years and semesters
                 </h2>
               </div>
               <button
                 type="button"
-                className="grid min-h-12 min-w-12 place-items-center rounded-2xl bg-slate-950 text-white active:scale-[0.98]"
+                className="grid min-h-10 min-w-10 place-items-center rounded-2xl bg-slate-950 text-white active:scale-[0.98]"
                 onClick={() => setCreateSemesterSheet({ mode: "year" })}
                 aria-label="Add year"
               >
                 <Plus className="h-5 w-5" />
               </button>
             </div>
-            <div className="mt-4 space-y-3">
+            <div className="mt-3 space-y-2">
               {customYearGroups.map((group) => (
                 <div
                   key={group.year}
-                  className="rounded-[1.35rem] border border-slate-200 bg-white p-3"
+                  className="rounded-[1.25rem] border border-slate-200 bg-white p-2.5"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
@@ -4403,12 +4781,12 @@ function MobileSettings() {
                       <Plus className="h-4 w-4" />
                     </button>
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="mt-2 grid grid-cols-2 gap-1.5">
                     {group.folders.map((folder) => (
                       <button
                         key={folder.id}
                         type="button"
-                        className="flex min-h-[48px] items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-2.5 py-2 text-left active:scale-[0.99]"
+                        className="flex min-h-[44px] items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-left active:scale-[0.99]"
                         onClick={() => setSemesterSheet(folder)}
                       >
                         <span
@@ -4558,14 +4936,14 @@ export default function MobileApp() {
         } as React.CSSProperties
       }
     >
-      <main
+      <animated.main
         className={`mx-auto min-h-[100dvh] w-full max-w-md px-5 ${
           showCourseDetail ? "pt-[calc(env(safe-area-inset-top)+0.6rem)]" : "pt-0"
         } ${
           keyboardOpen ? "pb-8" : "pb-[calc(env(safe-area-inset-bottom)+7rem)]"
         }`}
-        style={{ touchAction: "pan-y" }}
-        {...tabSwipeHandlers}
+        style={tabSwipeHandlers.style}
+        {...tabSwipeHandlers.bind()}
       >
         {!showCourseDetail && (
           <header className="sticky top-0 z-20 -mx-5 mb-4 border-b border-white/70 bg-white/86 px-5 pb-3 pt-[calc(env(safe-area-inset-top)+0.6rem)] shadow-[0_16px_42px_-34px_rgba(15,23,42,0.5)] backdrop-blur">
@@ -4617,7 +4995,7 @@ export default function MobileApp() {
         ) : (
           <MobileSettings />
         )}
-      </main>
+      </animated.main>
 
       {!showCourseDetail && !keyboardOpen && (
         <nav

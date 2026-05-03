@@ -894,6 +894,64 @@ textarea {
   z-index: 1;
 }
 
+.mobile-max-possible,
+.mobile-pass-summary,
+.mobile-install-demo {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.32), transparent 38%),
+    linear-gradient(135deg, #37aee2 0%, #30b987 50%, #d7a43a 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    0 18px 46px -31px rgba(14, 165, 233, 0.82),
+    0 20px 50px -34px rgba(34, 197, 94, 0.74);
+}
+
+.mobile-pass-summary {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(255, 255, 255, 0.24), transparent 34%),
+    linear-gradient(135deg, color-mix(in srgb, var(--theme-primary, #0f172a) 74%, #37aee2), color-mix(in srgb, var(--theme-accent, #30b987) 58%, #0f172a) 52%, #d7a43a);
+}
+
+.mobile-install-demo::after,
+.mobile-max-possible::after,
+.mobile-pass-summary::after {
+  position: absolute;
+  inset: -58% -28%;
+  z-index: 0;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(
+    108deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.26) 49%,
+    transparent 60%
+  );
+  mix-blend-mode: screen;
+  animation: mobile-widget-gloss 4.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.mobile-max-possible > *,
+.mobile-pass-summary > *,
+.mobile-install-demo > * {
+  position: relative;
+  z-index: 1;
+}
+
+.mobile-install-demo {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.14)),
+    linear-gradient(135deg, #37aee2, #30b987 50%, #d7a43a);
+}
+
+.mobile-install-demo video {
+  background:
+    radial-gradient(circle at 18% 8%, rgba(14, 165, 233, 0.24), transparent 38%),
+    linear-gradient(135deg, #020617, #0f172a);
+}
+
 .mobile-smart-widget {
   position: relative;
   isolation: isolate;
