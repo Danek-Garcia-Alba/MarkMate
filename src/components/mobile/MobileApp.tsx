@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { haptic } from "ios-haptics";
 import { useDrag } from "@use-gesture/react";
 import { animated, to as springTo, useSpring } from "@react-spring/web";
 import {
@@ -86,6 +87,33 @@ const mobileTabs: Array<{
   { id: "gpa", label: "GPA", icon: Gauge },
   { id: "settings", label: "Settings", icon: Settings },
 ];
+
+const installGuideSlides = [
+  {
+    src: "/install-guide/step-1.png",
+    alt: "Step 1: tap Share to install MarkMate",
+  },
+  {
+    src: "/install-guide/step-2.png",
+    alt: "Step 2: choose Add to Home Screen",
+  },
+  {
+    src: "/install-guide/step-3.png",
+    alt: "Step 3: name the app MarkMate",
+  },
+  {
+    src: "/install-guide/step-4.png",
+    alt: "Step 4: tap Add",
+  },
+  {
+    src: "/install-guide/step-5.png",
+    alt: "Step 5: open MarkMate from your Home Screen",
+  },
+  {
+    src: "/install-guide/step-6.png",
+    alt: "Step 6: phone mode enabled",
+  },
+] as const;
 
 const universityOptions = [
   { id: "uoft", label: "U of T" },
@@ -517,6 +545,16 @@ function triggerMobileHaptic(kind: MobileHapticKind = "selection") {
   };
 
   try {
+    if (kind === "success" || kind === "mode") {
+      haptic.confirm();
+    } else {
+      haptic();
+    }
+  } catch {
+    // The iOS haptic helper is best-effort and falls through to native/browser bridges.
+  }
+
+  try {
     maybeNative.webkit?.messageHandlers?.markMateHaptics?.postMessage({ kind });
     if (kind === "success") {
       maybeNative.Capacitor?.Plugins?.Haptics?.notification?.({ type: "SUCCESS" });
@@ -529,6 +567,7 @@ function triggerMobileHaptic(kind: MobileHapticKind = "selection") {
     // Native haptic bridges are optional; browser vibration is the web fallback below.
   }
   window.navigator.vibrate?.(patterns[kind]);
+  window.dispatchEvent(new CustomEvent("markmate:haptic", { detail: { kind } }));
 }
 
 function pausePageSwipe(ms = 180) {
@@ -858,7 +897,7 @@ function useHorizontalSwipeNavigation(
       config: { tension: 1320, friction: 58, mass: 0.46 },
       onRest: commit,
     });
-    window.setTimeout(commit, 180);
+    window.setTimeout(commit, 64);
   };
 
   const bind = useDrag(
@@ -1011,17 +1050,29 @@ function useHorizontalSwipeNavigation(
       transform: x.to((value) => `translate3d(${value}px,0,0)`),
       opacity,
       touchAction: "pan-y",
+      willChange: "transform, opacity",
     },
-    previewStyle: {
+    previousStyle: {
       transform: x.to((value) => {
-        const start =
-          previewDirection === "next" ? viewportWidth() : -viewportWidth();
-        return `translate3d(${start + value}px,0,0)`;
+        const incoming = -viewportWidth() + value;
+        return `translate3d(${Math.min(0, incoming)}px,0,0)`;
       }),
       opacity: x.to((value) =>
-        previewDirection ? Math.min(1, Math.max(0.18, Math.abs(value) / 120)) : 0
+        value > 0 ? Math.min(1, Math.max(0.16, value / 120)) : 0
       ),
       touchAction: "pan-y",
+      willChange: "transform, opacity",
+    },
+    nextStyle: {
+      transform: x.to((value) => {
+        const incoming = viewportWidth() + value;
+        return `translate3d(${Math.max(0, incoming)}px,0,0)`;
+      }),
+      opacity: x.to((value) =>
+        value < 0 ? Math.min(1, Math.max(0.16, Math.abs(value) / 120)) : 0
+      ),
+      touchAction: "pan-y",
+      willChange: "transform, opacity",
     },
   };
 }
@@ -5411,27 +5462,122 @@ function MobileCourseSetupSheet({
   );
 }
 
-function MobileInstallDemoVideo() {
+function MobileInstallGuideCarousel() {
+  const [activeSlide, setActiveSlide] = useState(0);
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const userControlUntilRef = useRef(0);
+  const frameRef = useRef<number | null>(null);
+
+  const scrollToSlide = (
+    index: number,
+    behavior: ScrollBehavior = "smooth",
+    userControlled = true
+  ) => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const nextIndex =
+      (index + installGuideSlides.length) % installGuideSlides.length;
+    if (userControlled) userControlUntilRef.current = Date.now() + 5200;
+    scroller.scrollTo({
+      left: scroller.clientWidth * nextIndex,
+      behavior,
+    });
+    setActiveSlide(nextIndex);
+  };
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (Date.now() < userControlUntilRef.current) return;
+      scrollToSlide(activeSlide + 1, "smooth", false);
+    }, 4300);
+    return () => window.clearInterval(id);
+  }, [activeSlide]);
+
+  useEffect(() => {
+    return () => {
+      if (frameRef.current != null) window.cancelAnimationFrame(frameRef.current);
+    };
+  }, []);
+
+  const onScroll = () => {
+    if (frameRef.current != null) window.cancelAnimationFrame(frameRef.current);
+    frameRef.current = window.requestAnimationFrame(() => {
+      const scroller = scrollerRef.current;
+      if (!scroller) return;
+      const nextIndex = Math.round(scroller.scrollLeft / scroller.clientWidth);
+      setActiveSlide(
+        Math.max(0, Math.min(installGuideSlides.length - 1, nextIndex))
+      );
+    });
+  };
+
   return (
-    <div className="mobile-install-demo mt-3 rounded-[1.45rem] p-[1px]">
-      <div className="relative overflow-hidden rounded-[1.38rem] bg-slate-950">
-        <video
-          className="block aspect-[9/14] w-full object-cover"
-          src="/remotion-assets/markmate-install-demo.mp4"
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="metadata"
-          aria-label="Install MarkMate on iPhone demo"
-        />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/72 to-transparent px-3 pb-3 pt-8">
-          <p className="text-[0.64rem] font-black uppercase tracking-[0.18em] text-white/55">
-            iPhone install
-          </p>
-          <p className="mt-0.5 text-sm font-black text-white">
-            Share, Add to Home Screen, open like an app.
-          </p>
+    <div
+      className="mobile-install-guide mt-3 rounded-[1.45rem] p-[1px]"
+      data-page-swipe-block="true"
+    >
+      <div className="relative overflow-hidden rounded-[1.38rem] bg-white/90 p-2">
+        <div className="mb-2 flex items-center justify-between gap-3 px-1">
+          <div>
+            <p className="text-[0.64rem] font-black uppercase tracking-[0.18em] text-slate-400">
+              iPhone install
+            </p>
+            <p className="text-sm font-black text-slate-900">
+              Swipe the guide or let it play.
+            </p>
+          </div>
+          <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-black text-slate-500">
+            {activeSlide + 1}/{installGuideSlides.length}
+          </span>
+        </div>
+
+        <div
+          ref={scrollerRef}
+          className="mobile-install-guide-rail"
+          onScroll={onScroll}
+          onPointerDown={() => {
+            userControlUntilRef.current = Date.now() + 6200;
+          }}
+        >
+          {installGuideSlides.map((slide) => (
+            <figure key={slide.src} className="mobile-install-guide-slide">
+              <img src={slide.src} alt={slide.alt} loading="lazy" draggable={false} />
+            </figure>
+          ))}
+        </div>
+
+        <div className="mt-2 flex items-center justify-between gap-2 px-1">
+          <button
+            type="button"
+            className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 active:scale-[0.98]"
+            onClick={() => scrollToSlide(activeSlide - 1)}
+            aria-label="Previous install step"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <div className="flex items-center justify-center gap-1.5">
+            {installGuideSlides.map((slide, index) => (
+              <button
+                key={slide.src}
+                type="button"
+                className={`h-2 rounded-full transition-all ${
+                  index === activeSlide
+                    ? "w-6 bg-slate-950"
+                    : "w-2 bg-slate-300"
+                }`}
+                onClick={() => scrollToSlide(index)}
+                aria-label={`Go to install step ${index + 1}`}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            className="grid h-9 w-9 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 active:scale-[0.98]"
+            onClick={() => scrollToSlide(activeSlide + 1)}
+            aria-label="Next install step"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </div>
@@ -5731,7 +5877,7 @@ function MobileSettings() {
             App mode is active
           </div>
         ) : (
-          <MobileInstallDemoVideo />
+          <MobileInstallGuideCarousel />
         )}
       </section>
 
@@ -5969,6 +6115,7 @@ function MobileSettings() {
 export default function MobileApp() {
   const [activeTab, setActiveTab] = useState<MobileTab>("dashboard");
   const [gpaOpen, setGpaOpen] = useState(false);
+  const [headerIdentityOpen, setHeaderIdentityOpen] = useState(false);
   const [courseCreateOpen, setCourseCreateOpen] = useState(false);
   const [courseCreateFolderId, setCourseCreateFolderId] = useState<string | null>(
     null
@@ -6061,12 +6208,12 @@ export default function MobileApp() {
       !gpaOpen &&
       !(activeTab === "courses" && coursesNestedOpen)
   );
-  const previewTab =
-    tabSwipeHandlers.previewDirection === "next"
-      ? mobileTabs[activeTabIndex + 1]?.id
-      : tabSwipeHandlers.previewDirection === "previous"
-      ? mobileTabs[activeTabIndex - 1]?.id
-      : null;
+  const previousTab = !showCourseDetail
+    ? mobileTabs[activeTabIndex - 1]?.id ?? null
+    : null;
+  const nextTab = !showCourseDetail
+    ? mobileTabs[activeTabIndex + 1]?.id ?? null
+    : null;
 
   const hasUniversitySemesterLayout = useMemo(
     () =>
@@ -6170,10 +6317,20 @@ export default function MobileApp() {
     return (
       <header className="sticky top-0 z-20 -mx-5 mb-4 border-b border-white/70 bg-white/86 px-5 pb-3 pt-[calc(env(safe-area-inset-top)+0.6rem)] shadow-[0_16px_42px_-34px_rgba(15,23,42,0.5)] backdrop-blur">
         <div className="flex items-center gap-3">
-          <MobileSchoolMark
-            themeId={appMode === "university" ? activeTheme.id : "markmate"}
-            label={activeTheme.label}
-          />
+          <button
+            type="button"
+            className="rounded-[1.25rem] text-left active:scale-[0.98]"
+            onClick={() => {
+              triggerMobileHaptic("selection");
+              setHeaderIdentityOpen(true);
+            }}
+            aria-label={`About ${activeTheme.label}`}
+          >
+            <MobileSchoolMark
+              themeId={appMode === "university" ? activeTheme.id : "markmate"}
+              label={activeTheme.label}
+            />
+          </button>
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs font-black uppercase tracking-[0.18em] text-slate-500">
               {activeTheme.label}
@@ -6222,19 +6379,29 @@ export default function MobileApp() {
         } ${
           keyboardOpen ? "pb-8" : "pb-[calc(env(safe-area-inset-bottom)+7rem)]"
         }`}
+        style={{ touchAction: "pan-y" }}
         {...tabSwipeHandlers.bind()}
       >
         <div className="relative">
           <animated.div style={tabSwipeHandlers.style}>
             {renderTabFrame(activeTab)}
           </animated.div>
-          {previewTab && !showCourseDetail && (
+          {previousTab && (
             <animated.div
               className="pointer-events-none absolute inset-x-0 top-0"
               aria-hidden="true"
-              style={tabSwipeHandlers.previewStyle}
+              style={tabSwipeHandlers.previousStyle}
             >
-              {renderTabFrame(previewTab, true)}
+              {renderTabFrame(previousTab, true)}
+            </animated.div>
+          )}
+          {nextTab && (
+            <animated.div
+              className="pointer-events-none absolute inset-x-0 top-0"
+              aria-hidden="true"
+              style={tabSwipeHandlers.nextStyle}
+            >
+              {renderTabFrame(nextTab, true)}
             </animated.div>
           )}
         </div>
@@ -6272,6 +6439,13 @@ export default function MobileApp() {
       )}
 
       <MobileGpaSheet open={gpaOpen} onClose={() => setGpaOpen(false)} />
+      <MobileIdentityInfoSheet
+        open={headerIdentityOpen}
+        onClose={() => setHeaderIdentityOpen(false)}
+        mode={appMode}
+        themeId={appMode === "university" ? universityThemeId : "markmate"}
+        label={activeTheme.label}
+      />
       <MobileCourseCreateSheet
         open={courseCreateOpen}
         onClose={() => {
