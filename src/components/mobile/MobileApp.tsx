@@ -19,6 +19,8 @@ import {
   LayoutDashboard,
   ListPlus,
   ListChecks,
+  Medal,
+  PartyPopper,
   Plus,
   Search,
   Settings,
@@ -27,6 +29,7 @@ import {
   Smartphone,
   Target,
   Trash2,
+  Trophy,
   X,
 } from "lucide-react";
 import {
@@ -130,6 +133,10 @@ const semesterColors = [
   "#4d7c0f",
   "#0369a1",
   "#52525b",
+  "#0e7490",
+  "#a16207",
+  "#9333ea",
+  "#dc2626",
 ] as const;
 
 const MOBILE_MODE_SNAPSHOT_KEY = "markmate-mobile-mode-snapshots-v1";
@@ -177,10 +184,15 @@ function switchMobileAppMode(nextMode: "custom" | "university") {
 
   const saved = snapshots[nextMode];
   if (nextMode === "custom") {
+    const savedCourses = saved?.courses ?? [];
+    const savedFolders =
+      savedCourses.length === 0 && isUniversityLikeFolderSet(saved?.folders ?? [])
+        ? []
+        : saved?.folders ?? [];
     useCourseStore.setState({
       appMode: "custom",
-      courses: saved?.courses ?? [],
-      folders: saved?.folders ?? [],
+      courses: savedCourses,
+      folders: savedFolders,
     });
     return;
   }
@@ -200,6 +212,36 @@ function nextCustomYearName(folders: CourseFolder[]) {
     if (!used.has(label)) return label;
   }
   return `Year ${used.size + 1}`;
+}
+
+function isUniversityLikeFolderSet(folders: CourseFolder[]) {
+  if (folders.length !== semesterYears.length * semesterTerms.length) return false;
+  const keys = new Set(
+    folders.map((folder) => `${folder.year ?? ""}:${folder.name}`)
+  );
+  return semesterYears.every((year) =>
+    semesterTerms.every((term) => keys.has(`${year}:${term}`))
+  );
+}
+
+function removeCustomYear(year: string) {
+  useCourseStore.setState((state) => {
+    if (state.appMode === "university") return {};
+    const folderIds = new Set(
+      state.folders
+        .filter((folder) => (folder.year?.trim() || "Unfiled") === year)
+        .map((folder) => folder.id)
+    );
+    if (folderIds.size === 0) return {};
+    return {
+      folders: state.folders.filter((folder) => !folderIds.has(folder.id)),
+      courses: state.courses.map((course) =>
+        course.folderId && folderIds.has(course.folderId)
+          ? { ...course, folderId: null }
+          : course
+      ),
+    };
+  });
 }
 
 function groupFoldersByYear(folders: CourseFolder[]) {
@@ -413,9 +455,9 @@ function isInteractiveSwipeTarget(target: EventTarget | null) {
   );
 }
 
-const IOS_PAGE_SPRING = { tension: 420, friction: 36, mass: 0.86 };
-const IOS_SHEET_SPRING = { tension: 390, friction: 34, mass: 0.9 };
-const SWIPE_LOCK_MS = 260;
+const IOS_PAGE_SPRING = { tension: 620, friction: 42, mass: 0.72 };
+const IOS_SHEET_SPRING = { tension: 520, friction: 38, mass: 0.78 };
+const SWIPE_LOCK_MS = 180;
 
 function viewportWidth() {
   return typeof window === "undefined" ? 390 : window.innerWidth;
@@ -423,6 +465,11 @@ function viewportWidth() {
 
 function viewportHeight() {
   return typeof window === "undefined" ? 844 : window.innerHeight;
+}
+
+function isPageSwipeAllowedFrom(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(target.closest("[data-allow-page-swipe='true']"));
 }
 
 function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
@@ -462,18 +509,25 @@ function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
 
     if (shouldComplete) {
       lockRef.current = true;
+      let committed = false;
+      const commit = () => {
+        if (committed) return;
+        committed = true;
+        onExitRef.current();
+        window.setTimeout(() => {
+          lockRef.current = false;
+        }, SWIPE_LOCK_MS);
+      };
       api.start({
         x: viewportWidth(),
         opacity: 0.92,
-        config: { tension: 520, friction: 42, mass: 0.82 },
+        config: { tension: 760, friction: 44, mass: 0.66 },
         onRest: () => {
           api.set({ x: 0, opacity: 1 });
-          onExitRef.current();
-          window.setTimeout(() => {
-            lockRef.current = false;
-          }, SWIPE_LOCK_MS);
+          commit();
         },
       });
+      window.setTimeout(commit, 70);
       return;
     }
 
@@ -628,7 +682,11 @@ function useHorizontalSwipeNavigation(
       velocity: [vx],
     }) => {
       if (!enabled || lockRef.current) return;
-      if (first && isInteractiveSwipeTarget(event.target)) {
+      if (
+        first &&
+        isInteractiveSwipeTarget(event.target) &&
+        !isPageSwipeAllowedFrom(event.target)
+      ) {
         cancel();
         return;
       }
@@ -664,20 +722,27 @@ function useHorizontalSwipeNavigation(
 
       if (shouldMove) {
         lockRef.current = true;
+        let committed = false;
+        const commit = () => {
+          if (committed) return;
+          committed = true;
+          if (dirX < 0) onNextRef.current();
+          else onPreviousRef.current();
+          window.setTimeout(() => {
+            lockRef.current = false;
+          }, SWIPE_LOCK_MS);
+        };
         const leavingX = dirX < 0 ? -viewportWidth() * 0.34 : viewportWidth() * 0.34;
         api.start({
           x: leavingX,
           opacity: 0.88,
-          config: { tension: 500, friction: 40, mass: 0.82 },
+          config: { tension: 740, friction: 44, mass: 0.66 },
           onRest: () => {
-            if (dirX < 0) onNextRef.current();
-            else onPreviousRef.current();
+            commit();
             api.set({ x: 0, opacity: 1 });
-            window.setTimeout(() => {
-              lockRef.current = false;
-            }, SWIPE_LOCK_MS);
           },
         });
+        window.setTimeout(commit, 65);
         return;
       }
 
@@ -707,21 +772,28 @@ function useHorizontalSwipeNavigation(
 
     if (shouldMove) {
       lockRef.current = true;
+      let committed = false;
+      const commit = () => {
+        if (committed) return;
+        committed = true;
+        if (directionX < 0) onNextRef.current();
+        else onPreviousRef.current();
+        window.setTimeout(() => {
+          lockRef.current = false;
+        }, SWIPE_LOCK_MS);
+      };
       const leavingX =
         directionX < 0 ? -viewportWidth() * 0.34 : viewportWidth() * 0.34;
       api.start({
         x: leavingX,
         opacity: 0.88,
-        config: { tension: 500, friction: 40, mass: 0.82 },
+        config: { tension: 740, friction: 44, mass: 0.66 },
         onRest: () => {
-          if (directionX < 0) onNextRef.current();
-          else onPreviousRef.current();
+          commit();
           api.set({ x: 0, opacity: 1 });
-          window.setTimeout(() => {
-            lockRef.current = false;
-          }, SWIPE_LOCK_MS);
         },
       });
+      window.setTimeout(commit, 65);
       return;
     }
 
@@ -732,7 +804,12 @@ function useHorizontalSwipeNavigation(
     bind: () => ({
       ...(typeof bind === "function" ? bind() : {}),
       onPointerDownCapture: (event: React.PointerEvent<HTMLElement>) => {
-        if (!enabled || lockRef.current || isInteractiveSwipeTarget(event.target)) {
+        if (
+          !enabled ||
+          lockRef.current ||
+          (isInteractiveSwipeTarget(event.target) &&
+            !isPageSwipeAllowedFrom(event.target))
+        ) {
           fallbackStartRef.current = null;
           return;
         }
@@ -958,8 +1035,12 @@ function MobileBottomSheet({
 }) {
   const horizontalSwipe = useHorizontalSwipeExit(onClose, open);
   const [expanded, setExpanded] = useState(false);
-  const [{ y }, sheetApi] = useSpring(() => ({
+  const [heightMode, setHeightMode] = useState(false);
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const collapsedHeightRef = useRef(0);
+  const [{ y, h }, sheetApi] = useSpring(() => ({
     y: 0,
+    h: 0,
     config: IOS_SHEET_SPRING,
   }));
   const closeLockRef = useRef(false);
@@ -968,7 +1049,8 @@ function MobileBottomSheet({
     if (!open) return;
     closeLockRef.current = false;
     setExpanded(false);
-    sheetApi.set({ y: 0 });
+    setHeightMode(false);
+    sheetApi.set({ y: 0, h: 0 });
   }, [open, sheetApi]);
 
   const closeFromDrag = () => {
@@ -985,34 +1067,75 @@ function MobileBottomSheet({
       active,
       direction: [, dirY],
       event,
+      first,
       movement: [, my],
       velocity: [, vy],
     }) => {
       event.stopPropagation();
       if (event.cancelable) event.preventDefault();
 
-      const baseY = expanded ? -24 : 0;
-      const nextY = Math.max(-80, Math.min(viewportHeight() * 0.7, baseY + my));
+      const fullHeight = Math.round(viewportHeight() * 0.985);
+      if (first) {
+        collapsedHeightRef.current = Math.min(
+          sectionRef.current?.getBoundingClientRect().height ?? fullHeight * 0.72,
+          Math.round(viewportHeight() * 0.9)
+        );
+        setHeightMode(true);
+        sheetApi.set({
+          h: expanded ? fullHeight : collapsedHeightRef.current,
+          y: 0,
+        });
+      }
+
+      const collapsedHeight =
+        collapsedHeightRef.current || Math.round(viewportHeight() * 0.72);
+      const currentBaseHeight = expanded ? fullHeight : collapsedHeight;
+      const nextHeight = Math.max(
+        Math.min(collapsedHeight, fullHeight * 0.72),
+        Math.min(fullHeight, currentBaseHeight - my)
+      );
+      const nextY = Math.max(0, Math.min(viewportHeight() * 0.72, my));
 
       if (active) {
-        sheetApi.start({ y: nextY, immediate: true });
+        if (my < 0 || expanded) {
+          sheetApi.start({ h: nextHeight, y: 0, immediate: true });
+        } else {
+          sheetApi.start({ h: collapsedHeight, y: nextY, immediate: true });
+        }
         return;
       }
 
-      const shouldDismiss = nextY > 112 || (dirY > 0 && vy > 0.58);
-      const shouldExpand = nextY < -36 || (dirY < 0 && vy > 0.36);
+      const shouldDismiss =
+        (!expanded && nextY > 112) || (dirY > 0 && vy > 0.72 && nextY > 58);
+      const shouldExpand =
+        nextHeight > collapsedHeight + 72 || (dirY < 0 && vy > 0.28);
+      const shouldCollapse =
+        expanded && (nextHeight < fullHeight - 128 || (dirY > 0 && vy > 0.34));
 
       if (shouldDismiss) {
         sheetApi.start({
           y: viewportHeight(),
-          config: { tension: 420, friction: 38, mass: 0.9 },
+          h: collapsedHeight,
+          config: { tension: 540, friction: 40, mass: 0.78 },
           onRest: closeFromDrag,
         });
         return;
       }
 
-      setExpanded(shouldExpand || (expanded && nextY < 72));
-      sheetApi.start({ y: 0, config: IOS_SHEET_SPRING });
+      if (shouldExpand && !shouldCollapse) {
+        setExpanded(true);
+        setHeightMode(true);
+        sheetApi.start({ h: fullHeight, y: 0, config: IOS_SHEET_SPRING });
+        return;
+      }
+
+      setExpanded(false);
+      sheetApi.start({
+        h: collapsedHeight,
+        y: 0,
+        config: IOS_SHEET_SPRING,
+        onRest: () => setHeightMode(false),
+      });
     },
     {
       axis: "y",
@@ -1036,8 +1159,9 @@ function MobileBottomSheet({
         onClick={onClose}
       />
       <animated.section
+        ref={sectionRef}
         className={`absolute inset-x-0 bottom-0 overflow-hidden rounded-t-[2rem] border border-white/70 bg-white px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-4 shadow-2xl ${
-          expanded ? "max-h-[98dvh]" : "max-h-[90dvh]"
+          expanded ? "max-h-[98.5dvh]" : "max-h-[90dvh]"
         }`}
         role="dialog"
         aria-modal="true"
@@ -1049,6 +1173,7 @@ function MobileBottomSheet({
           ),
           opacity: horizontalSwipe.opacity,
           touchAction: "pan-y",
+          height: heightMode ? h.to((value) => `${Math.max(420, value)}px`) : undefined,
         }}
         {...horizontalSwipe.bind()}
       >
@@ -1082,8 +1207,8 @@ function MobileBottomSheet({
           data-mobile-scroll="true"
           data-no-swipe="true"
           style={{
-            maxHeight: expanded
-              ? "calc(98dvh - 8rem - env(safe-area-inset-bottom))"
+            maxHeight: expanded || heightMode
+              ? "calc(98.5dvh - 8rem - env(safe-area-inset-bottom))"
               : "calc(90dvh - 8rem - env(safe-area-inset-bottom))",
           }}
         >
@@ -1386,9 +1511,6 @@ function MobileProgressRing({
   color?: string;
   tone?: "neutral" | "good" | "warn" | "bad";
 }) {
-  const size = 38;
-  const radius = 14;
-  const circumference = 2 * Math.PI * radius;
   const progress = clampPercent(value ?? 0);
   const ringColor =
     tone === "good"
@@ -1401,38 +1523,18 @@ function MobileProgressRing({
 
   return (
     <div
-      className="rounded-[1rem] border border-slate-200 bg-white px-1.5 py-1.5 text-center"
+      className="mobile-progress-orb rounded-[1rem] px-1.5 py-1.5 text-center"
       title={detail}
+      style={
+        {
+          "--ring-color": ringColor,
+          "--ring-progress": `${progress * 3.6}deg`,
+        } as React.CSSProperties
+      }
     >
       <div className="mx-auto grid justify-items-center gap-1">
-        <div className="relative grid h-10 w-10 shrink-0 place-items-center">
-          <svg
-            className="-rotate-90"
-            width={size}
-            height={size}
-            viewBox={`0 0 ${size} ${size}`}
-          >
-            <circle
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              fill="none"
-              stroke="#e2e8f0"
-              strokeWidth="4.5"
-            />
-            <circle
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              fill="none"
-              stroke={ringColor}
-              strokeLinecap="round"
-              strokeWidth="4.5"
-              strokeDasharray={circumference}
-              strokeDashoffset={circumference - (progress / 100) * circumference}
-            />
-          </svg>
-          <span className="absolute text-[0.66rem] font-black tabular-nums text-slate-950">
+        <div className="mobile-progress-orb-ring relative grid h-11 w-11 shrink-0 place-items-center rounded-full">
+          <span className="relative z-[1] text-[0.68rem] font-black tabular-nums text-slate-950">
             {value == null ? "--" : `${Math.round(value)}%`}
           </span>
         </div>
@@ -1503,7 +1605,7 @@ function MobileCourseProgressPanel({
       <div className="mobile-max-possible mt-2 flex min-h-10 items-center justify-between gap-3 rounded-2xl px-3 py-2">
         <span className="min-w-0">
           <span className="block text-[0.62rem] font-black uppercase tracking-wide text-white/60">
-            Max possible
+            Max possible grade you can get
           </span>
           <span className="block truncate text-[0.72rem] font-bold text-white/72">
             Remaining work at 100%
@@ -2210,10 +2312,15 @@ function MobileCourses({
     : null;
   const closeSemester = () => setActiveScope(null);
   const semesterSwipeHandlers = useHorizontalSwipeExit(closeSemester, Boolean(activeScopeOption));
+  const closeYear = () => setActiveYear(null);
   const yearSwipeHandlers = useHorizontalSwipeExit(
-    () => setActiveYear(null),
+    closeYear,
     Boolean(activeYear)
   );
+  const deleteYearAndClose = (year: string) => {
+    removeCustomYear(year);
+    setActiveYear(null);
+  };
 
   const searchResults = courses
     .filter((course) => {
@@ -2240,7 +2347,7 @@ function MobileCourses({
 
     return (
       <animated.div
-        className="space-y-3"
+        className="-mx-5 space-y-3 px-5"
         style={semesterSwipeHandlers.style}
         {...semesterSwipeHandlers.bind()}
       >
@@ -2326,7 +2433,7 @@ function MobileCourses({
 
     return (
       <animated.div
-        className="space-y-2.5"
+        className="-mx-5 space-y-2.5 px-5"
         style={yearSwipeHandlers.style}
         {...yearSwipeHandlers.bind()}
       >
@@ -2335,7 +2442,7 @@ function MobileCourses({
             <button
               type="button"
               className="grid min-h-10 min-w-10 place-items-center rounded-2xl bg-slate-950 text-white active:scale-[0.98]"
-              onClick={() => setActiveYear(null)}
+              onClick={closeYear}
               aria-label="Back to years"
             >
               <ArrowLeft className="h-5 w-5" />
@@ -2348,6 +2455,14 @@ function MobileCourses({
                 {activeYear}
               </h1>
             </div>
+            <button
+              type="button"
+              className="grid min-h-10 min-w-10 place-items-center rounded-2xl border border-rose-100 bg-rose-50 text-rose-600 active:scale-[0.98]"
+              onClick={() => deleteYearAndClose(activeYear)}
+              aria-label={`Delete ${activeYear}`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
             <button
               type="button"
               className="mobile-glow-action grid min-h-10 min-w-10 place-items-center rounded-2xl active:scale-[0.98]"
@@ -2385,13 +2500,14 @@ function MobileCourses({
                 <button
                   key={folder.id}
                   type="button"
-                  className="min-h-[52px] rounded-[1rem] border border-slate-200 bg-white px-2.5 py-2 text-left active:scale-[0.99]"
+                  className="mobile-accent-card min-h-[52px] rounded-[1rem] bg-white px-2.5 py-2 text-left active:scale-[0.99]"
+                  style={
+                    {
+                      "--card-accent": folder.color,
+                    } as React.CSSProperties
+                  }
                   onClick={() => setActiveScope(folder.id)}
                 >
-                  <span
-                    className="mb-1 block h-1.5 w-8 rounded-full"
-                    style={{ backgroundColor: folder.color }}
-                  />
                   <span className="block truncate text-sm font-black leading-tight text-slate-950">
                     {folder.name}
                   </span>
@@ -2515,26 +2631,37 @@ function MobileCourses({
                 0
               );
               return (
-                <button
+                <div
                   key={group.year}
-                  type="button"
-                  className="min-h-[58px] rounded-[1rem] border border-slate-200 bg-white px-2.5 py-2 text-left active:scale-[0.99]"
-                  onClick={() => setActiveYear(group.year)}
-                >
-                  <span
-                    className="mb-1 block h-1.5 w-9 rounded-full"
-                    style={{
-                      backgroundColor:
+                  className="mobile-accent-card relative min-h-[58px] rounded-[1rem] bg-white p-0"
+                  style={
+                    {
+                      "--card-accent":
                         group.folders[0]?.color ?? "var(--theme-primary)",
-                    }}
-                  />
-                  <span className="block truncate text-sm font-black leading-tight text-slate-950">
-                    {group.year}
-                  </span>
-                  <span className="mt-0.5 block text-[0.68rem] font-black text-slate-400">
-                    {group.folders.length} semesters / {yearCourseCount} courses
-                  </span>
-                </button>
+                    } as React.CSSProperties
+                  }
+                >
+                  <button
+                    type="button"
+                    className="block min-h-[58px] w-full rounded-[1rem] px-2.5 py-2 pr-11 text-left active:scale-[0.99]"
+                    onClick={() => setActiveYear(group.year)}
+                  >
+                    <span className="block truncate text-sm font-black leading-tight text-slate-950">
+                      {group.year}
+                    </span>
+                    <span className="mt-0.5 block text-[0.68rem] font-black text-slate-400">
+                      {group.folders.length} semesters / {yearCourseCount} courses
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-xl border border-rose-100 bg-rose-50 text-rose-600 active:scale-[0.98]"
+                    onClick={() => removeCustomYear(group.year)}
+                    aria-label={`Delete ${group.year}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -2565,13 +2692,14 @@ function MobileCourses({
               <button
                 key={option.id}
                 type="button"
-                className="min-h-[43px] rounded-[0.95rem] border border-slate-200 bg-white px-2 py-1.5 text-left shadow-[0_14px_30px_-30px_rgba(15,23,42,0.45)] active:scale-[0.99]"
+                className="mobile-accent-card min-h-[43px] rounded-[0.95rem] bg-white px-2 py-1.5 text-left shadow-[0_14px_30px_-30px_rgba(15,23,42,0.45)] active:scale-[0.99]"
+                style={
+                  {
+                    "--card-accent": color,
+                  } as React.CSSProperties
+                }
                 onClick={() => setActiveScope(option.id)}
               >
-                <span
-                  className="mb-1 block h-1.5 w-7 rounded-full"
-                  style={{ backgroundColor: color }}
-                />
                 <span className="block truncate text-[0.72rem] font-black leading-tight text-slate-950">
                   {option.label}
                 </span>
@@ -3486,7 +3614,7 @@ function MobileCourseDetail({
 
   return (
     <animated.div
-      className="min-h-[100dvh] space-y-3"
+      className="-mx-5 min-h-[100dvh] space-y-3 px-5"
       style={courseSwipeHandlers.style}
       {...courseSwipeHandlers.bind()}
     >
@@ -3861,7 +3989,10 @@ function MobileCalendar({
   const selectedItems = itemsByDate.get(selectedDate) ?? [];
   return (
     <div className="space-y-0">
-      <section className="rounded-[1.45rem] border border-white/70 bg-white/95 p-2.5 shadow-soft backdrop-blur">
+      <section
+        className="rounded-[1.45rem] border border-white/70 bg-white/95 p-2.5 shadow-soft backdrop-blur"
+        data-allow-page-swipe="true"
+      >
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-[0.68rem] font-black uppercase tracking-wide text-slate-500">
@@ -4554,6 +4685,214 @@ function MobileInstallDemoVideo() {
   );
 }
 
+type MobileCelebrationKind = "course" | "folder" | "year" | "all";
+
+function mobileCourseIsComplete(course: Course) {
+  return (
+    course.assignments.length > 0 && calcMetrics(course).displayCompleted >= 100
+  );
+}
+
+async function fireMobileCompletionBurst(kind: MobileCelebrationKind) {
+  try {
+    const { default: confetti } = await import("canvas-confetti");
+    const big = kind === "year" || kind === "all";
+    confetti({
+      particleCount: kind === "all" ? 220 : big ? 170 : 115,
+      spread: kind === "course" ? 74 : 104,
+      startVelocity: big ? 54 : 42,
+      origin: { x: 0.5, y: 0.32 },
+      scalar: big ? 1.08 : 0.95,
+      colors: ["#37aee2", "#30b987", "#d7a43a", "#f472b6", "#0f172a"],
+    });
+    if (big) {
+      window.setTimeout(() => {
+        confetti({
+          particleCount: 90,
+          spread: 118,
+          startVelocity: 32,
+          origin: { x: 0.5, y: 0.08 },
+          colors: ["#7dd3fc", "#86efac", "#fde68a", "#fda4af"],
+        });
+      }, 240);
+    }
+  } catch {
+    // Offline or reduced environments can skip confetti without breaking progress.
+  }
+}
+
+function MobileCelebrationCenter() {
+  const courses = useCourseStore((state) => state.courses);
+  const folders = useCourseStore((state) => state.folders);
+  const [toast, setToast] = useState<{
+    kind: MobileCelebrationKind;
+    title: string;
+    detail: string;
+  } | null>(null);
+  const previous = useRef({
+    courses: new Set<string>(),
+    folders: new Set<string>(),
+    years: new Set<string>(),
+    all: false,
+    initialized: false,
+  });
+
+  useEffect(() => {
+    const completeCourses = new Set(
+      courses.filter(mobileCourseIsComplete).map((course) => course.id)
+    );
+    const coursesByFolder = new Map<string, Course[]>();
+    courses.forEach((course) => {
+      if (!course.folderId) return;
+      coursesByFolder.set(course.folderId, [
+        ...(coursesByFolder.get(course.folderId) ?? []),
+        course,
+      ]);
+    });
+    const completeFolders = new Set(
+      folders
+        .filter((folder) => {
+          const folderCourses = coursesByFolder.get(folder.id) ?? [];
+          return (
+            folderCourses.length > 0 &&
+            folderCourses.every(mobileCourseIsComplete)
+          );
+        })
+        .map((folder) => folder.id)
+    );
+    const yearGroups = groupFoldersByYear(folders);
+    const completeYears = new Set(
+      yearGroups
+        .filter((group) => {
+          const yearCourses = group.folders.flatMap(
+            (folder) => coursesByFolder.get(folder.id) ?? []
+          );
+          return (
+            yearCourses.length > 0 &&
+            yearCourses.every(mobileCourseIsComplete)
+          );
+        })
+        .map((group) => group.year)
+    );
+    const allComplete =
+      courses.length > 0 && courses.every(mobileCourseIsComplete);
+
+    if (!previous.current.initialized) {
+      previous.current = {
+        courses: completeCourses,
+        folders: completeFolders,
+        years: completeYears,
+        all: allComplete,
+        initialized: true,
+      };
+      return;
+    }
+
+    const events: Array<{
+      kind: MobileCelebrationKind;
+      title: string;
+      detail: string;
+    }> = [];
+    const newlyCompletedCourse = courses.find(
+      (course) =>
+        completeCourses.has(course.id) &&
+        !previous.current.courses.has(course.id)
+    );
+    const newlyCompletedFolder = folders.find(
+      (folder) =>
+        completeFolders.has(folder.id) &&
+        !previous.current.folders.has(folder.id)
+    );
+    const newlyCompletedYear = yearGroups.find(
+      (group) =>
+        completeYears.has(group.year) && !previous.current.years.has(group.year)
+    );
+
+    if (newlyCompletedCourse) {
+      events.push({
+        kind: "course",
+        title: `${newlyCompletedCourse.name} finished`,
+        detail: "Course complete. That progress deserves a moment.",
+      });
+    }
+    if (newlyCompletedFolder) {
+      events.push({
+        kind: "folder",
+        title: `${folderDisplayName(newlyCompletedFolder)} finished`,
+        detail: "Semester cleared. Keep that momentum.",
+      });
+    }
+    if (newlyCompletedYear) {
+      events.push({
+        kind: "year",
+        title: `${newlyCompletedYear.year} finished`,
+        detail: "Year wrapped. MarkMate is calling that a clean win.",
+      });
+    }
+    if (allComplete && !previous.current.all) {
+      events.push({
+        kind: "all",
+        title: "Everything is complete",
+        detail: "Full setup cleared. That is the good kind of ridiculous.",
+      });
+    }
+
+    const timers = events.map((event, index) =>
+      window.setTimeout(() => {
+        void fireMobileCompletionBurst(event.kind);
+        setToast(event);
+      }, index * 1150)
+    );
+
+    previous.current = {
+      courses: completeCourses,
+      folders: completeFolders,
+      years: completeYears,
+      all: allComplete,
+      initialized: true,
+    };
+
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [courses, folders]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 4200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  if (!toast) return null;
+
+  const Icon =
+    toast.kind === "all"
+      ? Trophy
+      : toast.kind === "year"
+      ? Medal
+      : toast.kind === "folder"
+      ? PartyPopper
+      : CheckCircle2;
+
+  return (
+    <div className={`celebration-toast celebration-${toast.kind}`}>
+      <div className="celebration-toast-icon">
+        <Icon className="h-5 w-5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate font-black">{toast.title}</div>
+        <div className="text-sm font-semibold opacity-85">{toast.detail}</div>
+      </div>
+      <button
+        type="button"
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/12 active:scale-[0.98]"
+        onClick={() => setToast(null)}
+        aria-label="Dismiss celebration"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 function MobileSettings() {
   const appMode = useCourseStore((state) => state.appMode ?? "custom");
   const universityThemeId = useCourseStore(
@@ -4571,6 +4910,11 @@ function MobileSettings() {
   const customYearGroups = useMemo(() => groupFoldersByYear(folders), [folders]);
   const standalone = useStandalonePwa();
   const likelyIOS = useMemo(() => isLikelyIOSDevice(), []);
+  const deleteYear = (year: string) => {
+    removeCustomYear(year);
+    setSemesterSheet(null);
+    setCreateSemesterSheet(null);
+  };
 
   return (
     <div className="space-y-3">
@@ -4756,7 +5100,13 @@ function MobileSettings() {
               {customYearGroups.map((group) => (
                 <div
                   key={group.year}
-                  className="rounded-[1.25rem] border border-slate-200 bg-white p-2.5"
+                  className="mobile-accent-card rounded-[1.25rem] bg-white p-2.5"
+                  style={
+                    {
+                      "--card-accent":
+                        group.folders[0]?.color ?? "var(--theme-primary)",
+                    } as React.CSSProperties
+                  }
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
@@ -4767,32 +5117,43 @@ function MobileSettings() {
                         {group.folders.length} semesters
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      className="grid min-h-10 min-w-10 place-items-center rounded-2xl border border-slate-200 bg-white text-slate-600 active:scale-[0.98]"
-                      onClick={() =>
-                        setCreateSemesterSheet({
-                          mode: "semester",
-                          year: group.year,
-                        })
-                      }
-                      aria-label={`Add semester to ${group.year}`}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <button
+                        type="button"
+                        className="grid min-h-10 min-w-10 place-items-center rounded-2xl border border-rose-100 bg-rose-50 text-rose-600 active:scale-[0.98]"
+                        onClick={() => deleteYear(group.year)}
+                        aria-label={`Delete ${group.year}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        className="grid min-h-10 min-w-10 place-items-center rounded-2xl border border-slate-200 bg-white text-slate-600 active:scale-[0.98]"
+                        onClick={() =>
+                          setCreateSemesterSheet({
+                            mode: "semester",
+                            year: group.year,
+                          })
+                        }
+                        aria-label={`Add semester to ${group.year}`}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   <div className="mt-2 grid grid-cols-2 gap-1.5">
                     {group.folders.map((folder) => (
                       <button
                         key={folder.id}
                         type="button"
-                        className="flex min-h-[44px] items-center gap-2 rounded-2xl border border-slate-100 bg-slate-50 px-2.5 py-1.5 text-left active:scale-[0.99]"
+                        className="mobile-accent-card flex min-h-[44px] items-center gap-2 rounded-2xl bg-slate-50 px-2.5 py-1.5 text-left active:scale-[0.99]"
+                        style={
+                          {
+                            "--card-accent": folder.color,
+                          } as React.CSSProperties
+                        }
                         onClick={() => setSemesterSheet(folder)}
                       >
-                        <span
-                          className="h-8 w-1.5 rounded-full"
-                          style={{ backgroundColor: folder.color }}
-                        />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-black text-slate-950">
                             {folder.name}
@@ -4909,6 +5270,16 @@ export default function MobileApp() {
       setAppMode("university");
     }
   }, [appMode, hasUniversitySemesterLayout, setAppMode]);
+
+  useEffect(() => {
+    if (
+      appMode === "custom" &&
+      useCourseStore.getState().courses.length === 0 &&
+      isUniversityLikeFolderSet(folders)
+    ) {
+      useCourseStore.setState({ folders: [] });
+    }
+  }, [appMode, folders]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0 });
@@ -5038,6 +5409,7 @@ export default function MobileApp() {
         onCreated={openCourse}
         initialFolderId={courseCreateFolderId}
       />
+      <MobileCelebrationCenter />
     </div>
   );
 }
