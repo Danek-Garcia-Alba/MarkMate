@@ -469,6 +469,20 @@ function isSwipeExitBlockingTarget(target: EventTarget | null) {
   );
 }
 
+function isSheetDragBlockingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(
+    target.closest(
+      "button, input, textarea, select, a, [contenteditable='true'], [data-sheet-drag-block='true']"
+    )
+  );
+}
+
+function sheetScrollParent(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return null;
+  return target.closest("[data-mobile-scroll='true']") as HTMLElement | null;
+}
+
 const IOS_PAGE_SPRING = { tension: 1040, friction: 52, mass: 0.5 };
 const IOS_SHEET_SPRING = { tension: 900, friction: 54, mass: 0.54 };
 const SWIPE_LOCK_MS = 72;
@@ -1098,12 +1112,14 @@ function MobileBottomSheet({
 }) {
   const horizontalSwipe = useHorizontalSwipeExit(onClose, open);
   const [expanded, setExpanded] = useState(false);
+  const [sheetDragActive, setSheetDragActive] = useState(false);
   const sectionRef = useRef<HTMLElement | null>(null);
   const contentMeasureRef = useRef<HTMLDivElement | null>(null);
   const dragStartYRef = useRef(0);
   const collapsedOffsetRef = useRef(0);
   const expandedRef = useRef(false);
-  const tapBlockUntilRef = useRef(0);
+  const sheetResizeActiveRef = useRef(false);
+  const sheetDragActiveRef = useRef(false);
   const [{ y }, sheetApi] = useSpring(() => ({
     y: viewportHeight(),
     config: IOS_SHEET_SPRING,
@@ -1167,6 +1183,12 @@ function MobileBottomSheet({
     });
   };
 
+  const setSheetDragVisual = (next: boolean) => {
+    if (sheetDragActiveRef.current === next) return;
+    sheetDragActiveRef.current = next;
+    setSheetDragActive(next);
+  };
+
   const settleSheet = (nextExpanded: boolean) => {
     const collapsedOffset = measureCollapsedOffset();
     collapsedOffsetRef.current = collapsedOffset;
@@ -1178,48 +1200,87 @@ function MobileBottomSheet({
     });
   };
 
-  const toggleSheetSize = (blockFollowUpClick = false) => {
-    if (Date.now() < tapBlockUntilRef.current || closeLockRef.current) return;
-    if (blockFollowUpClick) {
-      tapBlockUntilRef.current = Date.now() + 260;
-    }
-    settleSheet(!expandedRef.current);
-  };
-
   const handleDrag = useDrag(
     ({
       active,
+      cancel,
       direction: [, dirY],
       event,
       first,
-      movement: [, my],
-      tap,
+      last,
+      movement: [mx, my],
       velocity: [, vy],
     }) => {
-      event.stopPropagation();
-      if (event.cancelable) event.preventDefault();
+      if (closeLockRef.current) return;
 
       const fullHeight = Math.round(viewportHeight() * 0.985);
       if (first) {
+        if (isSheetDragBlockingTarget(event.target)) {
+          sheetResizeActiveRef.current = false;
+          setSheetDragVisual(false);
+          cancel();
+          return;
+        }
         collapsedOffsetRef.current = measureCollapsedOffset();
         dragStartYRef.current = expandedRef.current ? 0 : collapsedOffsetRef.current;
+        sheetResizeActiveRef.current = false;
+        setSheetDragVisual(true);
       }
 
       const collapsedOffset = collapsedOffsetRef.current || measureCollapsedOffset();
       const dismissOffset = viewportHeight();
       const nextY = Math.max(0, Math.min(dismissOffset, dragStartYRef.current + my));
-      if (!active && tap) {
-        toggleSheetSize(true);
-        return;
-      }
-      if (Math.abs(my) > 4) {
-        tapBlockUntilRef.current = Date.now() + 240;
+
+      const absX = Math.abs(mx);
+      const absY = Math.abs(my);
+      const scrollParent = sheetScrollParent(event.target);
+      const scrollingInsideSheet = Boolean(scrollParent && scrollParent.scrollTop > 2);
+      const horizontalIntent = absX > 10 && absX > absY * 1.15;
+      const wantsSheetPullDown = my > 0 && (!scrollParent || scrollParent.scrollTop <= 2);
+      const wantsSheetPushUp =
+        my < 0 && !expandedRef.current && (!scrollParent || scrollParent.scrollTop <= 2);
+      const shouldLetContentScroll =
+        Boolean(scrollParent) &&
+        ((expandedRef.current && my < 0) || scrollingInsideSheet);
+
+      if (active && !sheetResizeActiveRef.current) {
+        if (horizontalIntent) {
+          setSheetDragVisual(false);
+          cancel();
+          return;
+        }
+
+        if (absY < 6) {
+          return;
+        }
+
+        if (shouldLetContentScroll || (!wantsSheetPullDown && !wantsSheetPushUp)) {
+          setSheetDragVisual(false);
+          return;
+        }
+
+        blurActiveMobileControl();
+        pausePageSwipe();
+        sheetResizeActiveRef.current = true;
       }
 
+      if (!sheetResizeActiveRef.current) {
+        if (last) {
+          setSheetDragVisual(false);
+        }
+        return;
+      }
+
+      event.stopPropagation();
+      if (event.cancelable) event.preventDefault();
+
       if (active) {
+        setSheetDragVisual(true);
         sheetApi.start({ y: nextY, immediate: true });
         return;
       }
+
+      setSheetDragVisual(false);
 
       const dismissSlack = expandedRef.current
         ? Math.min(330, fullHeight * 0.4)
@@ -1243,21 +1304,25 @@ function MobileBottomSheet({
           (dirY > 0 && vy > 0.52));
 
       if (shouldDismiss) {
+        sheetResizeActiveRef.current = false;
         closeFromDrag();
         return;
       }
 
       if (shouldExpand && !shouldCollapse) {
+        sheetResizeActiveRef.current = false;
         settleSheet(true);
         return;
       }
 
+      sheetResizeActiveRef.current = false;
       settleSheet(false);
     },
     {
       axis: "y",
-      filterTaps: false,
+      filterTaps: true,
       eventOptions: { passive: false },
+      pointer: { touch: true },
     }
   );
 
@@ -1277,7 +1342,9 @@ function MobileBottomSheet({
       />
       <animated.section
         ref={sectionRef}
-        className="absolute inset-x-0 bottom-0 flex h-[98.5dvh] flex-col overflow-hidden rounded-t-[2rem] border border-white/70 bg-white px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-4 shadow-2xl"
+        className={`mobile-sheet-shell absolute inset-x-0 bottom-0 flex h-[98.5dvh] flex-col overflow-hidden rounded-t-[2rem] border border-white/70 bg-white px-5 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-4 shadow-2xl ${
+          sheetDragActive ? "is-sheet-dragging" : ""
+        }`}
         role="dialog"
         aria-modal="true"
         aria-label={title}
@@ -1292,60 +1359,32 @@ function MobileBottomSheet({
         }}
         {...horizontalSwipe.bind()}
       >
-        <div className="mb-5 flex items-center justify-between gap-3">
-          <h2 className="text-xl font-black tracking-tight text-slate-950">
-            {title}
-          </h2>
-          <div className="flex shrink-0 items-center gap-2">
-            {action}
-            <button
-              type="button"
-              className="grid min-h-11 min-w-11 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 active:scale-[0.98]"
-              onClick={onClose}
-              aria-label="Close"
-            >
-              <X className="h-5 w-5" />
-            </button>
+        <div className="mobile-sheet-drag-surface flex min-h-0 flex-1 flex-col" {...handleDrag()}>
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <h2 className="text-xl font-black tracking-tight text-slate-950">
+              {title}
+            </h2>
+            <div className="flex shrink-0 items-center gap-2">
+              {action}
+              <button
+                type="button"
+                className="grid min-h-11 min-w-11 place-items-center rounded-full border border-slate-200 bg-white text-slate-600 active:scale-[0.98]"
+                onClick={onClose}
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+          <div
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5"
+            data-mobile-scroll="true"
+            data-no-swipe="true"
+          >
+            <div ref={contentMeasureRef}>{children}</div>
           </div>
         </div>
-        <div
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5"
-          data-mobile-scroll="true"
-          data-no-swipe="true"
-        >
-          <div ref={contentMeasureRef}>{children}</div>
-        </div>
       </animated.section>
-      <animated.button
-        type="button"
-        className={`mobile-sheet-thumb-toggle ${
-          expanded ? "is-expanded" : ""
-        }`}
-        aria-label={
-          expanded
-            ? "Return sheet to default height"
-            : "Expand sheet to full screen"
-        }
-        data-no-swipe="true"
-        onClick={(event) => {
-          event.stopPropagation();
-          toggleSheetSize();
-        }}
-        style={{
-          top: expanded
-            ? "clamp(31rem, 74dvh, calc(100dvh - 6.5rem))"
-            : "clamp(27rem, 66dvh, calc(100dvh - 9rem))",
-          transform: horizontalSwipe.x.to(
-            (xValue) => `translate3d(calc(-50% + ${xValue}px),0,0)`
-          ),
-          opacity: horizontalSwipe.opacity,
-        }}
-        {...handleDrag()}
-      >
-        <span className="mobile-sheet-handle block h-9 w-40 rounded-full">
-          <span className="mobile-sheet-handle-groove mx-auto block h-full w-full rounded-full" />
-        </span>
-      </animated.button>
     </div>,
     document.body
   );
