@@ -792,6 +792,13 @@ function useHorizontalSwipeNavigation(
   const lockRef = useRef(false);
   const clickBlockUntilRef = useRef(0);
   const edgeHapticRef = useRef(false);
+  const gestureHapticRef = useRef(false);
+  const touchHapticStartRef = useRef<{
+    x: number;
+    y: number;
+    time: number;
+    active: boolean;
+  } | null>(null);
   const [{ x, opacity }, api] = useSpring(() => ({
     x: 0,
     opacity: 1,
@@ -822,10 +829,35 @@ function useHorizontalSwipeNavigation(
     const width = viewportWidth();
     const direction = movementX < 0 ? "next" : "previous";
     if (canMove(direction)) {
-      return Math.max(-width * 0.92, Math.min(width * 0.92, movementX));
+      return Math.max(-width * 0.98, Math.min(width * 0.98, movementX));
     }
     const resisted = movementX * 0.22;
     return Math.max(-width * 0.16, Math.min(width * 0.16, resisted));
+  };
+
+  const swipeDecision = (
+    movementX: number,
+    movementY: number,
+    velocityX: number,
+    directionX: number
+  ) => {
+    const absX = Math.abs(movementX);
+    const absY = Math.abs(movementY);
+    const horizontalIntent = absX > 5 && absX > absY * 1.04;
+    const direction: "next" | "previous" =
+      (directionX || movementX) < 0 ? "next" : "previous";
+    const allowed = canMove(direction);
+    const shouldMove =
+      allowed &&
+      horizontalIntent &&
+      (absX > viewportWidth() * 0.065 || (absX > 12 && velocityX > 0.1));
+    return { allowed, direction, horizontalIntent, shouldMove };
+  };
+
+  const fireCompletedSwipeHaptic = () => {
+    if (gestureHapticRef.current) return;
+    gestureHapticRef.current = true;
+    triggerMobileHaptic("selection");
   };
 
   const resetNavigation = () => {
@@ -840,7 +872,7 @@ function useHorizontalSwipeNavigation(
     api.start({
       x: 0,
       opacity: 1,
-      config: { tension: 1120, friction: 56, mass: 0.45, clamp: true },
+      config: { tension: 1580, friction: 70, mass: 0.32, clamp: true },
     });
   };
 
@@ -855,19 +887,16 @@ function useHorizontalSwipeNavigation(
       resetNavigation();
       return;
     }
-    const absX = Math.abs(movementX);
-    const absY = Math.abs(movementY);
-    const horizontalIntent = absX > 7 && absX > absY * 1.1;
-    const direction: "next" | "previous" =
-      (directionX || movementX) < 0 ? "next" : "previous";
-    const allowed = canMove(direction);
-    const shouldMove =
-      allowed &&
-      horizontalIntent &&
-      (absX > viewportWidth() * 0.105 || (absX > 18 && velocityX > 0.18));
+    const { allowed, direction, horizontalIntent, shouldMove } = swipeDecision(
+      movementX,
+      movementY,
+      velocityX,
+      directionX
+    );
 
     if (!shouldMove) {
       if (horizontalIntent && !allowed) triggerMobileHaptic("boundary");
+      gestureHapticRef.current = false;
       settleToCurrentTab();
       return;
     }
@@ -878,9 +907,9 @@ function useHorizontalSwipeNavigation(
       direction === "next" ? width + currentX : -width + currentX;
 
     lockRef.current = true;
-    clickBlockUntilRef.current = Date.now() + 260;
+    clickBlockUntilRef.current = Date.now() + 220;
 
-    triggerMobileHaptic("selection");
+    fireCompletedSwipeHaptic();
     flushSync(() => {
       if (direction === "next") onNextRef.current();
       else onPreviousRef.current();
@@ -890,17 +919,19 @@ function useHorizontalSwipeNavigation(
     api.start({
       x: 0,
       opacity: 1,
-      config: { tension: 1180, friction: 54, mass: 0.42, clamp: true },
+      config: { tension: 2200, friction: 78, mass: 0.28, clamp: true },
       onRest: () => {
         lockRef.current = false;
+        gestureHapticRef.current = false;
       },
     });
     window.setTimeout(() => {
       lockRef.current = false;
+      gestureHapticRef.current = false;
       if (!enabled) {
         api.set({ x: 0, opacity: 1 });
       }
-    }, 360);
+    }, 280);
   };
 
   const bind = useDrag(
@@ -929,10 +960,12 @@ function useHorizontalSwipeNavigation(
       }
 
       const absX = Math.abs(mx);
-      const absY = Math.abs(my);
-      const horizontalIntent = absX > 7 && absX > absY * 1.1;
-      const direction: "next" | "previous" = mx < 0 ? "next" : "previous";
-      const allowed = canMove(direction);
+      const { allowed, horizontalIntent } = swipeDecision(
+        mx,
+        my,
+        vx,
+        dirX
+      );
       const clampedX = projectedX(mx);
 
       if (active) {
@@ -978,6 +1011,83 @@ function useHorizontalSwipeNavigation(
         if (Date.now() > clickBlockUntilRef.current) return;
         event.preventDefault();
         event.stopPropagation();
+      },
+      onPointerDownCapture: (event: React.PointerEvent<HTMLElement>) => {
+        if (
+          event.pointerType !== "touch" ||
+          !enabled ||
+          lockRef.current ||
+          (isSwipeBlockingTarget(event.target) &&
+            !isPageSwipeAllowedFrom(event.target))
+        ) {
+          return;
+        }
+        gestureHapticRef.current = false;
+        touchHapticStartRef.current = {
+          x: event.clientX,
+          y: event.clientY,
+          time: Date.now(),
+          active: true,
+        };
+      },
+      onPointerUpCapture: (event: React.PointerEvent<HTMLElement>) => {
+        if (event.pointerType !== "touch") return;
+        const start = touchHapticStartRef.current;
+        touchHapticStartRef.current = null;
+        if (!enabled || !start?.active || lockRef.current || isPageSwipePaused()) {
+          return;
+        }
+        const movementX = event.clientX - start.x;
+        const movementY = event.clientY - start.y;
+        const velocityX = Math.abs(movementX) / Math.max(Date.now() - start.time, 1);
+        const directionX = Math.sign(movementX) || 1;
+        if (swipeDecision(movementX, movementY, velocityX, directionX).shouldMove) {
+          fireCompletedSwipeHaptic();
+        }
+      },
+      onPointerCancelCapture: () => {
+        touchHapticStartRef.current = null;
+        gestureHapticRef.current = false;
+      },
+      onTouchStartCapture: (event: React.TouchEvent<HTMLElement>) => {
+        if (
+          !enabled ||
+          lockRef.current ||
+          (isSwipeBlockingTarget(event.target) &&
+            !isPageSwipeAllowedFrom(event.target))
+        ) {
+          touchHapticStartRef.current = null;
+          return;
+        }
+        const touch = event.touches[0];
+        if (!touch) return;
+        gestureHapticRef.current = false;
+        touchHapticStartRef.current = {
+          x: touch.clientX,
+          y: touch.clientY,
+          time: Date.now(),
+          active: true,
+        };
+      },
+      onTouchEndCapture: (event: React.TouchEvent<HTMLElement>) => {
+        const start = touchHapticStartRef.current;
+        touchHapticStartRef.current = null;
+        if (!enabled || !start?.active || lockRef.current || isPageSwipePaused()) {
+          return;
+        }
+        const touch = event.changedTouches[0];
+        if (!touch) return;
+        const movementX = touch.clientX - start.x;
+        const movementY = touch.clientY - start.y;
+        const velocityX = Math.abs(movementX) / Math.max(Date.now() - start.time, 1);
+        const directionX = Math.sign(movementX) || 1;
+        if (swipeDecision(movementX, movementY, velocityX, directionX).shouldMove) {
+          fireCompletedSwipeHaptic();
+        }
+      },
+      onTouchCancelCapture: () => {
+        touchHapticStartRef.current = null;
+        gestureHapticRef.current = false;
       },
     }),
     style: {
