@@ -792,15 +792,6 @@ function useHorizontalSwipeNavigation(
   const lockRef = useRef(false);
   const clickBlockUntilRef = useRef(0);
   const edgeHapticRef = useRef(false);
-  const fallbackStartRef = useRef<{
-    x: number;
-    y: number;
-    time: number;
-    active: boolean;
-  } | null>(null);
-  const [previewDirection, setPreviewDirection] = useState<
-    "next" | "previous" | null
-  >(null);
   const [{ x, opacity }, api] = useSpring(() => ({
     x: 0,
     opacity: 1,
@@ -816,7 +807,6 @@ function useHorizontalSwipeNavigation(
 
   useEffect(() => {
     if (!enabled) {
-      setPreviewDirection(null);
       api.set({ x: 0, opacity: 1 });
     }
   }, [api, enabled]);
@@ -843,7 +833,6 @@ function useHorizontalSwipeNavigation(
       x: 0,
       opacity: 1,
       config: IOS_PAGE_SPRING,
-      onRest: () => setPreviewDirection(null),
     });
   };
 
@@ -877,15 +866,14 @@ function useHorizontalSwipeNavigation(
 
     lockRef.current = true;
     clickBlockUntilRef.current = Date.now() + 260;
-    setPreviewDirection(direction);
     let committed = false;
     const commit = () => {
       if (committed) return;
       committed = true;
       if (direction === "next") onNextRef.current();
       else onPreviousRef.current();
+      triggerMobileHaptic("selection");
       api.set({ x: 0, opacity: 1 });
-      setPreviewDirection(null);
       window.setTimeout(() => {
         lockRef.current = false;
       }, SWIPE_LOCK_MS);
@@ -894,10 +882,10 @@ function useHorizontalSwipeNavigation(
     api.start({
       x: leavingX,
       opacity: 1,
-      config: { tension: 1320, friction: 58, mass: 0.46 },
+      config: { tension: 1450, friction: 62, mass: 0.38, clamp: true },
       onRest: commit,
     });
-    window.setTimeout(commit, 64);
+    window.setTimeout(commit, 420);
   };
 
   const bind = useDrag(
@@ -941,10 +929,8 @@ function useHorizontalSwipeNavigation(
         event.stopPropagation();
         if (event.cancelable) event.preventDefault();
         if (allowed) {
-          setPreviewDirection(direction);
           edgeHapticRef.current = false;
         } else {
-          setPreviewDirection(null);
           if (!edgeHapticRef.current && absX > 24) {
             triggerMobileHaptic("boundary");
             edgeHapticRef.current = true;
@@ -978,79 +964,14 @@ function useHorizontalSwipeNavigation(
         event.preventDefault();
         event.stopPropagation();
       },
-      onPointerDownCapture: (event: React.PointerEvent<HTMLElement>) => {
-        if (
-          !enabled ||
-          lockRef.current ||
-          (isSwipeBlockingTarget(event.target) &&
-            !isPageSwipeAllowedFrom(event.target))
-        ) {
-          fallbackStartRef.current = null;
-          return;
-        }
-        fallbackStartRef.current = {
-          x: event.clientX,
-          y: event.clientY,
-          time: Date.now(),
-          active: true,
-        };
-      },
-      onPointerMoveCapture: (event: React.PointerEvent<HTMLElement>) => {
-        const start = fallbackStartRef.current;
-        if (!enabled || !start?.active || lockRef.current || isPageSwipePaused()) {
-          fallbackStartRef.current = null;
-          api.start({ x: 0, opacity: 1, immediate: true });
-          return;
-        }
-        const mx = event.clientX - start.x;
-        const my = event.clientY - start.y;
-        const absX = Math.abs(mx);
-        const absY = Math.abs(my);
-        const horizontalIntent = absX > 7 && absX > absY * 1.1;
-        if (!horizontalIntent) return;
-        const direction: "next" | "previous" = mx < 0 ? "next" : "previous";
-        const allowed = canMove(direction);
-        clickBlockUntilRef.current = Date.now() + 220;
-        event.stopPropagation();
-        if (event.cancelable) event.preventDefault();
-        if (allowed) {
-          setPreviewDirection(direction);
-          edgeHapticRef.current = false;
-        } else {
-          setPreviewDirection(null);
-          if (!edgeHapticRef.current && absX > 24) {
-            triggerMobileHaptic("boundary");
-            edgeHapticRef.current = true;
-          }
-        }
-        api.start({
-          x: projectedX(mx),
-          opacity: 1,
-          immediate: true,
-        });
-      },
-      onPointerUpCapture: (event: React.PointerEvent<HTMLElement>) => {
-        const start = fallbackStartRef.current;
-        fallbackStartRef.current = null;
-        if (!enabled || !start?.active || lockRef.current || isPageSwipePaused()) return;
-        const mx = event.clientX - start.x;
-        const my = event.clientY - start.y;
-        const velocityX = Math.abs(mx) / Math.max(Date.now() - start.time, 1);
-        edgeHapticRef.current = false;
-        completeNavigation(mx, my, velocityX, Math.sign(mx) || 1);
-      },
-      onPointerCancelCapture: () => {
-        fallbackStartRef.current = null;
-        edgeHapticRef.current = false;
-        resetNavigation();
-      },
     }),
-    previewDirection,
     style: {
       transform: x.to((value) => `translate3d(${value}px,0,0)`),
       opacity,
       touchAction: "pan-y",
       willChange: "transform, opacity",
+      backfaceVisibility: "hidden" as const,
+      WebkitBackfaceVisibility: "hidden" as const,
     },
     previousStyle: {
       transform: x.to((value) => {
@@ -1062,6 +983,8 @@ function useHorizontalSwipeNavigation(
       ),
       touchAction: "pan-y",
       willChange: "transform, opacity",
+      backfaceVisibility: "hidden" as const,
+      WebkitBackfaceVisibility: "hidden" as const,
     },
     nextStyle: {
       transform: x.to((value) => {
@@ -1073,6 +996,8 @@ function useHorizontalSwipeNavigation(
       ),
       touchAction: "pan-y",
       willChange: "transform, opacity",
+      backfaceVisibility: "hidden" as const,
+      WebkitBackfaceVisibility: "hidden" as const,
     },
   };
 }
@@ -4309,7 +4234,7 @@ function MobileCourseDetail({
       style={courseSwipeHandlers.style}
       {...courseSwipeHandlers.bind()}
     >
-      <header className="sticky top-[calc(env(safe-area-inset-top)+0.5rem)] z-10 -mx-1 rounded-[1.65rem] border border-white/70 bg-white/92 p-2.5 shadow-soft backdrop-blur">
+      <header className="relative z-10 -mx-1 rounded-[1.65rem] border border-white/70 bg-white/92 p-2.5 shadow-soft backdrop-blur">
         <div className="flex items-center gap-3">
           <button
             type="button"
