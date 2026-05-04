@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { haptic } from "ios-haptics";
 import { useDrag } from "@use-gesture/react";
 import { animated, to as springTo, useSpring } from "@react-spring/web";
@@ -836,6 +836,14 @@ function useHorizontalSwipeNavigation(
     });
   };
 
+  const settleToCurrentTab = () => {
+    api.start({
+      x: 0,
+      opacity: 1,
+      config: { tension: 1120, friction: 56, mass: 0.45, clamp: true },
+    });
+  };
+
   const completeNavigation = (
     movementX: number,
     movementY: number,
@@ -860,32 +868,39 @@ function useHorizontalSwipeNavigation(
 
     if (!shouldMove) {
       if (horizontalIntent && !allowed) triggerMobileHaptic("boundary");
-      resetNavigation();
+      settleToCurrentTab();
       return;
     }
 
+    const width = viewportWidth();
+    const currentX = projectedX(movementX);
+    const continuityX =
+      direction === "next" ? width + currentX : -width + currentX;
+
     lockRef.current = true;
     clickBlockUntilRef.current = Date.now() + 260;
-    let committed = false;
-    const commit = () => {
-      if (committed) return;
-      committed = true;
+
+    triggerMobileHaptic("selection");
+    flushSync(() => {
       if (direction === "next") onNextRef.current();
       else onPreviousRef.current();
-      triggerMobileHaptic("selection");
-      api.set({ x: 0, opacity: 1 });
-      window.setTimeout(() => {
-        lockRef.current = false;
-      }, SWIPE_LOCK_MS);
-    };
-    const leavingX = direction === "next" ? -viewportWidth() : viewportWidth();
-    api.start({
-      x: leavingX,
-      opacity: 1,
-      config: { tension: 1450, friction: 62, mass: 0.38, clamp: true },
-      onRest: commit,
     });
-    window.setTimeout(commit, 420);
+
+    api.set({ x: continuityX, opacity: 1 });
+    api.start({
+      x: 0,
+      opacity: 1,
+      config: { tension: 1180, friction: 54, mass: 0.42, clamp: true },
+      onRest: () => {
+        lockRef.current = false;
+      },
+    });
+    window.setTimeout(() => {
+      lockRef.current = false;
+      if (!enabled) {
+        api.set({ x: 0, opacity: 1 });
+      }
+    }, 360);
   };
 
   const bind = useDrag(
