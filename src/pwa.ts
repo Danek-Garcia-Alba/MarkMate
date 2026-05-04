@@ -2,7 +2,7 @@ export function registerServiceWorker() {
   if (!("serviceWorker" in navigator) || !import.meta.env.PROD) return;
 
   window.addEventListener("load", () => {
-    const reloadKey = "markmate-sw-refresh-v6";
+    const reloadKey = "markmate-sw-refresh-v7";
     let refreshing = false;
 
     navigator.serviceWorker.addEventListener("controllerchange", () => {
@@ -13,7 +13,7 @@ export function registerServiceWorker() {
     });
 
     navigator.serviceWorker
-      .register("/sw.js?markmate-pwa-v6", { scope: "/" })
+      .register("/sw.js?markmate-pwa-v7", { scope: "/" })
       .then((registration) => {
         const activateFreshWorker = (worker?: ServiceWorker | null) => {
           worker?.postMessage({ type: "SKIP_WAITING" });

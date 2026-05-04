@@ -516,6 +516,8 @@ const IOS_SHEET_SPRING = { tension: 900, friction: 54, mass: 0.54 };
 const SWIPE_LOCK_MS = 72;
 let pageSwipePausedUntil = 0;
 
+const IOS_PAGER_EASE = (value: number) => 1 - Math.pow(1 - value, 3);
+
 type MobileHapticKind = "selection" | "mode" | "open" | "success" | "boundary";
 
 function triggerMobileHaptic(kind: MobileHapticKind = "selection") {
@@ -672,7 +674,7 @@ function useHorizontalSwipeExit(onExit: () => void, enabled = true) {
     }) => {
       if (!enabled || lockRef.current) return;
       if (isPageSwipePaused()) {
-        api.start({ x: 0, opacity: 1, immediate: true });
+        api.set({ x: 0, opacity: 1 });
         return;
       }
       if (first && isSwipeExitBlockingTarget(event.target) && pointerX > 44) {
@@ -793,6 +795,7 @@ function useHorizontalSwipeNavigation(
   const clickBlockUntilRef = useRef(0);
   const edgeHapticRef = useRef(false);
   const gestureHapticRef = useRef(false);
+  const widthRef = useRef(viewportWidth());
   const touchHapticStartRef = useRef<{
     x: number;
     y: number;
@@ -804,6 +807,19 @@ function useHorizontalSwipeNavigation(
     opacity: 1,
     config: IOS_PAGE_SPRING,
   }));
+
+  useLayoutEffect(() => {
+    const updateWidth = () => {
+      widthRef.current = viewportWidth();
+    };
+    updateWidth();
+    window.addEventListener("resize", updateWidth, { passive: true });
+    window.addEventListener("orientationchange", updateWidth);
+    return () => {
+      window.removeEventListener("resize", updateWidth);
+      window.removeEventListener("orientationchange", updateWidth);
+    };
+  }, []);
 
   useEffect(() => {
     onNextRef.current = onNext;
@@ -825,8 +841,10 @@ function useHorizontalSwipeNavigation(
       : index > 0;
   };
 
+  const currentWidth = () => widthRef.current || viewportWidth();
+
   const projectedX = (movementX: number) => {
-    const width = viewportWidth();
+    const width = currentWidth();
     const direction = movementX < 0 ? "next" : "previous";
     if (canMove(direction)) {
       return Math.max(-width * 0.98, Math.min(width * 0.98, movementX));
@@ -850,8 +868,15 @@ function useHorizontalSwipeNavigation(
     const shouldMove =
       allowed &&
       horizontalIntent &&
-      (absX > viewportWidth() * 0.045 || (absX > 8 && velocityX > 0.07));
+      (absX > currentWidth() * 0.06 || (absX > 10 && velocityX > 0.08));
     return { allowed, direction, horizontalIntent, shouldMove };
+  };
+
+  const releaseDuration = (movementX: number, velocityX: number) => {
+    const width = currentWidth();
+    const dragProgress = Math.min(0.85, Math.abs(movementX) / Math.max(width, 1));
+    const velocityBoost = Math.min(0.9, velocityX) * 44;
+    return Math.round(Math.max(104, 166 - dragProgress * 42 - velocityBoost));
   };
 
   const fireCompletedSwipeHaptic = () => {
@@ -901,37 +926,34 @@ function useHorizontalSwipeNavigation(
       return;
     }
 
-    const width = viewportWidth();
-    const currentX = projectedX(movementX);
-    const continuityX =
-      direction === "next" ? width + currentX : -width + currentX;
+    const width = currentWidth();
+    const finalX = direction === "next" ? -width : width;
+    const duration = releaseDuration(movementX, velocityX);
+    let finished = false;
 
-    lockRef.current = true;
-    clickBlockUntilRef.current = Date.now() + 180;
-
-    fireCompletedSwipeHaptic();
-    flushSync(() => {
-      if (direction === "next") onNextRef.current();
-      else onPreviousRef.current();
-    });
-
-    api.set({ x: continuityX, opacity: 1 });
-    api.start({
-      x: 0,
-      opacity: 1,
-      config: { tension: 2600, friction: 82, mass: 0.24, clamp: true },
-      onRest: () => {
-        lockRef.current = false;
-        gestureHapticRef.current = false;
-      },
-    });
-    window.setTimeout(() => {
+    const finishNavigation = () => {
+      if (finished) return;
+      finished = true;
+      flushSync(() => {
+        if (direction === "next") onNextRef.current();
+        else onPreviousRef.current();
+      });
+      api.set({ x: 0, opacity: 1 });
       lockRef.current = false;
       gestureHapticRef.current = false;
-      if (!enabled) {
-        api.set({ x: 0, opacity: 1 });
-      }
-    }, 240);
+    };
+
+    lockRef.current = true;
+    clickBlockUntilRef.current = Date.now() + duration + 70;
+
+    fireCompletedSwipeHaptic();
+    api.start({
+      x: finalX,
+      opacity: 1,
+      config: { duration, easing: IOS_PAGER_EASE },
+      onRest: finishNavigation,
+    });
+    window.setTimeout(finishNavigation, duration + 80);
   };
 
   const bind = useDrag(
@@ -970,7 +992,7 @@ function useHorizontalSwipeNavigation(
 
       if (active) {
         if (!horizontalIntent) {
-          api.start({ x: 0, opacity: 1, immediate: true });
+          api.set({ x: 0, opacity: 1 });
           return;
         }
         clickBlockUntilRef.current = Date.now() + 220;
@@ -984,10 +1006,9 @@ function useHorizontalSwipeNavigation(
             edgeHapticRef.current = true;
           }
         }
-        api.start({
+        api.set({
           x: clampedX,
           opacity: 1,
-          immediate: true,
         });
         return;
       }
@@ -1100,7 +1121,7 @@ function useHorizontalSwipeNavigation(
     },
     previousStyle: {
       transform: x.to((value) => {
-        const incoming = -viewportWidth() + value;
+        const incoming = -currentWidth() + value;
         return `translate3d(${Math.min(0, incoming)}px,0,0)`;
       }),
       opacity: x.to((value) =>
@@ -1113,7 +1134,7 @@ function useHorizontalSwipeNavigation(
     },
     nextStyle: {
       transform: x.to((value) => {
-        const incoming = viewportWidth() + value;
+        const incoming = currentWidth() + value;
         return `translate3d(${Math.max(0, incoming)}px,0,0)`;
       }),
       opacity: x.to((value) =>
