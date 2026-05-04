@@ -850,14 +850,14 @@ function useHorizontalSwipeNavigation(
     const shouldMove =
       allowed &&
       horizontalIntent &&
-      (absX > viewportWidth() * 0.065 || (absX > 12 && velocityX > 0.1));
+      (absX > viewportWidth() * 0.045 || (absX > 8 && velocityX > 0.07));
     return { allowed, direction, horizontalIntent, shouldMove };
   };
 
   const fireCompletedSwipeHaptic = () => {
     if (gestureHapticRef.current) return;
     gestureHapticRef.current = true;
-    triggerMobileHaptic("selection");
+    triggerMobileHaptic("mode");
   };
 
   const resetNavigation = () => {
@@ -872,7 +872,7 @@ function useHorizontalSwipeNavigation(
     api.start({
       x: 0,
       opacity: 1,
-      config: { tension: 1580, friction: 70, mass: 0.32, clamp: true },
+      config: { tension: 1820, friction: 74, mass: 0.28, clamp: true },
     });
   };
 
@@ -907,7 +907,7 @@ function useHorizontalSwipeNavigation(
       direction === "next" ? width + currentX : -width + currentX;
 
     lockRef.current = true;
-    clickBlockUntilRef.current = Date.now() + 220;
+    clickBlockUntilRef.current = Date.now() + 180;
 
     fireCompletedSwipeHaptic();
     flushSync(() => {
@@ -919,7 +919,7 @@ function useHorizontalSwipeNavigation(
     api.start({
       x: 0,
       opacity: 1,
-      config: { tension: 2200, friction: 78, mass: 0.28, clamp: true },
+      config: { tension: 2600, friction: 82, mass: 0.24, clamp: true },
       onRest: () => {
         lockRef.current = false;
         gestureHapticRef.current = false;
@@ -931,7 +931,7 @@ function useHorizontalSwipeNavigation(
       if (!enabled) {
         api.set({ x: 0, opacity: 1 });
       }
-    }, 280);
+    }, 240);
   };
 
   const bind = useDrag(
