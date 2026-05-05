@@ -2195,19 +2195,29 @@ function MobileCourseProgressPanel({
   course,
   metrics,
   onOpenPass,
+  accentColor,
 }: {
   course: Course;
   metrics: ReturnType<typeof calcMetrics>;
   onOpenPass: () => void;
+  accentColor?: string;
 }) {
   const weightStatus = courseWeightStatus(metrics.totalWeights);
   const completeAssignments = course.assignments.filter(
     (assignment) => assignment.status === "completed"
   ).length;
   const maxPossible = maxPossibleCourseGrade(course);
+  const courseAccent = accentColor ?? course.color ?? "var(--theme-primary)";
 
   return (
-    <section className="rounded-[1.45rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
+    <section
+      className="mobile-course-progress-panel rounded-[1.45rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur"
+      style={
+        {
+          "--course-accent": courseAccent,
+        } as React.CSSProperties
+      }
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[0.68rem] font-black uppercase tracking-wide text-slate-500">
@@ -2232,13 +2242,13 @@ function MobileCourseProgressPanel({
           label="Grade"
           value={metrics.gradeSoFar}
           detail="Grade so far"
-          color={course.color ?? "var(--theme-primary)"}
+          color={courseAccent}
         />
         <MobileProgressRing
           label="Done"
           value={metrics.displayCompleted}
           detail={`${completeAssignments}/${course.assignments.length} assignments done`}
-          color={course.color ?? "var(--theme-primary)"}
+          color={courseAccent}
         />
         <MobileProgressRing
           label="Weights"
@@ -2875,31 +2885,38 @@ function MobileCourseCard({
   folders,
   onOpen,
   compact = false,
+  accentColor,
 }: {
   course: Course;
   folders: CourseFolder[];
   onOpen: () => void;
   compact?: boolean;
+  accentColor?: string;
 }) {
   const metrics = calcMetrics(course);
   const completeAssignments = course.assignments.filter(
     (assignment) => assignment.status === "completed"
   ).length;
+  const courseAccent = accentColor ?? course.color ?? "var(--theme-primary)";
 
   return (
     <button
       type="button"
-      className={`w-full border border-white/70 bg-white/95 text-left shadow-soft backdrop-blur active:scale-[0.99] ${
+      className={`mobile-course-card w-full border border-white/70 bg-white/95 text-left shadow-soft backdrop-blur active:scale-[0.99] ${
         compact ? "rounded-[1.15rem] px-3 py-2" : "rounded-[1.5rem] p-4"
       }`}
+      style={
+        {
+          "--course-accent": courseAccent,
+        } as React.CSSProperties
+      }
       onClick={onOpen}
     >
       <div
         className={`flex items-center gap-3 ${compact ? "min-h-[42px]" : "min-h-[70px]"}`}
       >
         <div
-          className={`${compact ? "h-10 w-1.5" : "h-14 w-2"} rounded-full`}
-          style={{ backgroundColor: course.color ?? "var(--theme-primary)" }}
+          className={`mobile-course-accent ${compact ? "h-10 w-1.5" : "h-14 w-2"} rounded-full`}
         />
         <div className="min-w-0 flex-1">
           <p
@@ -2934,10 +2951,9 @@ function MobileCourseCard({
         className={`${compact ? "mt-1.5 h-1.5" : "mt-3 h-2"} overflow-hidden rounded-full bg-slate-100`}
       >
         <div
-          className="h-full rounded-full"
+          className="mobile-course-progress h-full rounded-full"
           style={{
             width: `${metrics.displayCompleted}%`,
-            backgroundColor: course.color ?? "var(--theme-primary)",
           }}
         />
       </div>
@@ -2966,7 +2982,14 @@ function MobileCourses({
   const courses = useCourseStore((state) => state.courses);
   const folders = useCourseStore((state) => state.folders);
   const appMode = useCourseStore((state) => state.appMode ?? "custom");
+  const universityThemeId = useCourseStore(
+    (state) => state.universityThemeId ?? "uoft"
+  );
+  const customThemeId = useCourseStore((state) => state.customThemeId ?? "classic");
   const removeFolder = useCourseStore((state) => state.removeFolder);
+  const activeTheme = getActiveTheme(appMode, universityThemeId, customThemeId);
+  const schoolAccent =
+    appMode === "university" ? activeTheme.primaryColor : undefined;
   const [query, setQuery] = useState("");
   const [activeYear, setActiveYear] = useState<string | null>(
     initialYear ?? null
@@ -3145,6 +3168,7 @@ function MobileCourses({
                     year: activeScopeOption.folder?.year ?? activeYear,
                   })
                 }
+                accentColor={schoolAccent}
                 compact
               />
             ))}
@@ -3350,6 +3374,7 @@ function MobileCourses({
                     year: folder?.year ?? null,
                   });
                 }}
+                accentColor={schoolAccent}
               />
             ))}
             {searchResults.length === 0 && (
@@ -3439,7 +3464,9 @@ function MobileCourses({
           <div className="mt-2 grid grid-cols-3 gap-1.5">
           {folderOptions.map((option) => {
             const scopedCourses = coursesForScope(option.id);
-            const color = option.folder?.color ?? "var(--theme-primary)";
+            const color = isCustomMode
+              ? option.folder?.color ?? "var(--theme-primary)"
+              : activeTheme.primaryColor;
             if (option.id === "unfiled" && scopedCourses.length === 0) {
               return null;
             }
@@ -3494,6 +3521,13 @@ function MobileCourseCreateSheet({
 }) {
   const folders = useCourseStore((state) => state.folders);
   const addCourse = useCourseStore((state) => state.addCourse);
+  const setCourseColor = useCourseStore((state) => state.setCourseColor);
+  const appMode = useCourseStore((state) => state.appMode ?? "custom");
+  const universityThemeId = useCourseStore(
+    (state) => state.universityThemeId ?? "uoft"
+  );
+  const customThemeId = useCourseStore((state) => state.customThemeId ?? "classic");
+  const activeTheme = getActiveTheme(appMode, universityThemeId, customThemeId);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const folderSelectRef = useRef<HTMLSelectElement>(null);
   const submitLockRef = useRef(false);
@@ -3523,6 +3557,9 @@ function MobileCourseCreateSheet({
         : null;
     triggerMobileHaptic("success");
     const courseId = addCourse(liveName.trim() || "New Course", liveFolderId);
+    if (appMode === "university") {
+      setCourseColor(courseId, activeTheme.primaryColor);
+    }
     onClose();
     onCreated(courseId, liveFolderId);
     window.setTimeout(() => {
@@ -4333,6 +4370,11 @@ function MobileCourseDetail({
 }) {
   const courses = useCourseStore((state) => state.courses);
   const renameCourse = useCourseStore((state) => state.renameCourse);
+  const appMode = useCourseStore((state) => state.appMode ?? "custom");
+  const universityThemeId = useCourseStore(
+    (state) => state.universityThemeId ?? "uoft"
+  );
+  const customThemeId = useCourseStore((state) => state.customThemeId ?? "classic");
   const [assignmentSheet, setAssignmentSheet] = useState<Assignment | null>(null);
   const [assignmentComposerMode, setAssignmentComposerMode] =
     useState<MobileAssignmentComposerMode | null>(null);
@@ -4372,6 +4414,11 @@ function MobileCourseDetail({
   const defaultCreditLabel = `Default ${formatCredits(
     report.policy.defaultCreditWeight
   )}`;
+  const activeTheme = getActiveTheme(appMode, universityThemeId, customThemeId);
+  const courseAccent =
+    appMode === "university"
+      ? activeTheme.primaryColor
+      : course.color ?? activeTheme.primaryColor;
 
   return (
     <animated.div
@@ -4425,6 +4472,7 @@ function MobileCourseDetail({
           course={course}
           metrics={metrics}
           onOpenPass={() => setPassOpen(true)}
+          accentColor={courseAccent}
         />
       )}
 
