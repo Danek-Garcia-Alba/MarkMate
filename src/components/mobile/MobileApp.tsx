@@ -158,18 +158,19 @@ const statusOptions: Array<{ id: AssignmentStatus; label: string }> = [
 const semesterYears = ["Year 1", "Year 2", "Year 3", "Year 4"] as const;
 const semesterTerms = ["Fall", "Winter", "Summer"] as const;
 const semesterColors = [
+  "#334155",
   "#0f766e",
+  "#1d4ed8",
+  "#475569",
+  "#64748b",
+  "#115e59",
   "#2563eb",
-  "#7c3aed",
-  "#be123c",
-  "#c2410c",
-  "#4d7c0f",
-  "#0369a1",
   "#52525b",
-  "#0e7490",
-  "#a16207",
-  "#9333ea",
-  "#dc2626",
+  "#0f766e",
+  "#334155",
+  "#1d4ed8",
+  "#475569",
+  "#64748b",
 ] as const;
 
 const MOBILE_MODE_SNAPSHOT_KEY = "markmate-mobile-mode-snapshots-v1";
@@ -1973,7 +1974,7 @@ function MobileMetric({
       <p className="text-xs font-black uppercase tracking-wide text-slate-500">
         {label}
       </p>
-      <div className="mt-2 text-3xl font-black tabular-nums tracking-tight text-slate-950">
+      <div className="mt-2 text-2xl font-black tabular-nums tracking-tight text-slate-950">
         {value}
       </div>
       <p className="mt-1 text-sm font-semibold leading-snug text-slate-500">
@@ -2182,7 +2183,7 @@ function MobileProgressRing({
             {value == null ? "--" : `${Math.round(value)}%`}
           </span>
         </div>
-        <p className="text-[0.58rem] font-black uppercase tracking-wide text-slate-500">
+        <p className="text-[0.64rem] font-black uppercase tracking-wide text-slate-500">
           {label}
         </p>
       </div>
@@ -2215,7 +2216,7 @@ function MobileCourseProgressPanel({
           <h2 className="text-base font-black tracking-tight">Snapshot</h2>
         </div>
         <span
-          className={`max-w-[8.2rem] rounded-full px-2 py-1 text-right text-[0.62rem] font-black leading-tight ${
+          className={`max-w-[8.2rem] rounded-full px-2 py-1 text-right text-[0.68rem] font-black leading-tight ${
             weightStatus.tone === "good"
               ? "bg-emerald-50 text-emerald-700"
               : weightStatus.tone === "bad"
@@ -2248,7 +2249,7 @@ function MobileCourseProgressPanel({
       </div>
       <div className="mobile-max-possible mt-2 flex min-h-10 items-center justify-between gap-3 rounded-2xl px-3 py-2">
         <span className="min-w-0">
-          <span className="block text-[0.62rem] font-black uppercase tracking-wide text-white/60">
+          <span className="block text-[0.68rem] font-black uppercase tracking-wide text-white/60">
             Max possible grade you can get
           </span>
           <span className="block truncate text-[0.72rem] font-bold text-white/72">
@@ -2292,22 +2293,22 @@ function MobileGpaHero({
     appMode === "university" ? report.policy.shortName : "MarkMate";
 
   return (
-    <section className="relative overflow-hidden rounded-[1.65rem] border border-white/70 bg-slate-950 p-3.5 text-white shadow-[0_24px_64px_-34px_rgba(15,23,42,0.75)]">
+    <section className="relative overflow-hidden rounded-[1.5rem] border border-white/70 bg-slate-950 p-3.5 text-white shadow-[0_24px_64px_-34px_rgba(15,23,42,0.75)]">
       <div
         className="absolute inset-0 opacity-95"
         style={{
           background:
-            "linear-gradient(135deg, var(--theme-primary) 0%, var(--theme-primary) 48%, var(--theme-accent) 100%)",
+            "linear-gradient(145deg, color-mix(in srgb, var(--theme-primary) 94%, #020617) 0%, color-mix(in srgb, var(--theme-primary) 86%, #0f172a) 64%, color-mix(in srgb, var(--theme-accent) 22%, var(--theme-primary)) 100%)",
         }}
       />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.26),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.12),transparent)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(255,255,255,0.2),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.1),transparent)]" />
       <div className="relative">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[0.68rem] font-black uppercase tracking-[0.18em] text-white/70">
               GPA estimate
             </p>
-            <div className="mt-2 text-[2.7rem] font-black leading-none tracking-tight">
+            <div className="mt-2 text-4xl font-black leading-none tracking-tight">
               {formatSchoolAverage(report)}
             </div>
             <p className="mt-2 text-xs font-black uppercase tracking-[0.18em] text-white/75">
@@ -2700,16 +2701,16 @@ function MobileHomeCommandPanel({
   );
 
   return (
-    <section className="rounded-[1.75rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
+    <section className="rounded-[1.55rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-wide text-slate-500">
             Today
           </p>
-          <div className="mt-0.5 text-3xl font-black tracking-tight text-slate-950">
+          <div className="mt-0.5 text-2xl font-black tracking-tight text-slate-950">
             {formatSchoolAverage(report)}
           </div>
-          <p className="mt-1 text-sm font-black uppercase tracking-[0.16em] text-slate-400">
+          <p className="mt-1 text-xs font-black uppercase tracking-wide text-slate-400">
             {primaryLabel}
           </p>
         </div>
@@ -2724,11 +2725,11 @@ function MobileHomeCommandPanel({
       </div>
 
       {activeWidget && (
-        <div className="mobile-smart-widget mt-3 rounded-[1.45rem] p-[1px] text-white">
+        <div className="mobile-smart-widget mt-3 rounded-[1.35rem] p-[1px] text-white">
           <animated.button
             key={activeWidget.key}
             type="button"
-            className="mobile-smart-widget-button flex min-h-[76px] w-full items-center gap-3 rounded-[1.35rem] px-3.5 py-3 text-left"
+            className="mobile-smart-widget-button flex min-h-[74px] w-full items-center gap-3 rounded-[1.25rem] px-3.5 py-3 text-left"
             data-page-swipe-block="true"
             style={{
               transform: widgetX.to((value) => `translate3d(${value}px,0,0)`),
@@ -2749,10 +2750,10 @@ function MobileHomeCommandPanel({
                 <MarkMateLogo size="xs" className="scale-[1.08]" />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[0.68rem] font-black uppercase tracking-wide text-white/70">
+                <span className="block text-xs font-black uppercase tracking-wide text-white/70">
                   {activeWidget.label}
                 </span>
-                <span className="mt-0.5 block truncate text-[1.45rem] font-black leading-none tracking-tight text-white">
+                <span className="mt-0.5 block truncate text-xl font-black leading-none tracking-tight text-white">
                   {activeWidget.title}
                 </span>
                 <span className="mt-0.5 block truncate text-xs font-bold text-white/78">
@@ -2767,7 +2768,7 @@ function MobileHomeCommandPanel({
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button
           type="button"
-          className="mobile-glow-action inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-3 text-base font-black active:scale-[0.98]"
+          className="mobile-glow-action inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-3 text-sm font-black active:scale-[0.98]"
           onClick={() => {
             triggerMobileHaptic(needsCustomSetup ? "selection" : "open");
             if (needsCustomSetup) onGoCourses();
@@ -2779,7 +2780,7 @@ function MobileHomeCommandPanel({
         </button>
         <button
           type="button"
-          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-base font-black text-slate-700 active:scale-[0.98]"
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700 active:scale-[0.98]"
           onClick={onGoCalendar}
         >
           <CalendarDays className="h-5 w-5" />
@@ -6491,7 +6492,7 @@ export default function MobileApp() {
                 <button
                   key={tab.id}
                   type="button"
-                  className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl text-[0.68rem] font-bold transition focus:outline-none active:scale-[0.98] ${
+                  className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl text-xs font-bold transition focus:outline-none active:scale-[0.98] ${
                     active ? "text-white" : "bg-transparent text-slate-500"
                   }`}
                   style={{
