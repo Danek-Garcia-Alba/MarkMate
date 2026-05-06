@@ -5,8 +5,8 @@
 :root {
   color-scheme: light;
   font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    sans-serif;
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Inter,
+    ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -118,16 +118,25 @@ body {
 }
 
 .app-shell[data-app-mode="custom"]::before {
-  opacity: 0.12;
+  opacity: 0.18;
   clip-path: none;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--theme-primary) 18%, transparent),
+      color-mix(in srgb, var(--theme-accent) 8%, transparent) 42%,
+      transparent 86%
+    );
 }
 
 .app-shell[data-app-mode="custom"]::after {
   inset: 0;
   background-image:
-    radial-gradient(circle at 86% 18%, color-mix(in srgb, var(--theme-primary) 9%, transparent), transparent 18rem);
+    radial-gradient(circle at 82% 12%, color-mix(in srgb, var(--theme-accent) 16%, transparent), transparent 17rem),
+    radial-gradient(circle at 12% 4%, color-mix(in srgb, var(--theme-primary) 10%, transparent), transparent 15rem),
+    linear-gradient(116deg, transparent 0 24%, rgba(255, 255, 255, 0.3) 24.2% 24.7%, transparent 25% 100%);
   background-size: auto;
-  opacity: 0.3;
+  opacity: 0.42;
   filter: none;
   mask-image: linear-gradient(180deg, black, transparent 72%);
 }
@@ -1066,17 +1075,18 @@ textarea {
   overflow: hidden;
   border: 1px solid transparent;
   background:
-    linear-gradient(#fff, #fff) padding-box,
+    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.92)) padding-box,
     linear-gradient(
         135deg,
-        color-mix(in srgb, var(--card-accent, #0f766e) 86%, white),
-        rgba(255, 255, 255, 0.64) 42%,
-        color-mix(in srgb, var(--card-accent, #0f766e) 28%, #ffffff)
+        color-mix(in srgb, var(--card-accent, #0f766e) 58%, white),
+        rgba(255, 255, 255, 0.78) 48%,
+        color-mix(in srgb, var(--card-accent, #0f766e) 18%, #ffffff)
       )
       border-box;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.74),
-    0 16px 34px -31px color-mix(in srgb, var(--card-accent, #0f766e) 44%, #0f172a);
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.5),
+    0 16px 34px -31px color-mix(in srgb, var(--card-accent, #0f766e) 34%, #0f172a);
 }
 
 .mobile-accent-card::before {
@@ -1088,14 +1098,257 @@ textarea {
   background:
     radial-gradient(
       circle at 8% 8%,
-      color-mix(in srgb, var(--card-accent, #0f766e) 13%, transparent),
+      color-mix(in srgb, var(--card-accent, #0f766e) 9%, transparent),
       transparent 42%
     ),
     linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--card-accent, #0f766e) 28%, transparent),
+      transparent 1.65rem
+    ),
+    linear-gradient(
       135deg,
-      color-mix(in srgb, var(--card-accent, #0f766e) 7%, white),
+      color-mix(in srgb, var(--card-accent, #0f766e) 4%, white),
       rgba(255, 255, 255, 0.94)
     );
+}
+
+@media (max-width: 760px) {
+  .app-shell section[class*="shadow-soft"][class*="backdrop-blur"],
+  .app-shell article[class*="shadow-soft"][class*="backdrop-blur"] {
+    border-color: rgba(255, 255, 255, 0.8);
+    background-image:
+      radial-gradient(circle at 10% 0%, color-mix(in srgb, var(--theme-accent, #0ea5e9) 8%, transparent), transparent 38%),
+      linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.9));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.88),
+      0 22px 54px -42px color-mix(in srgb, var(--theme-primary, #0f172a) 52%, rgba(15, 23, 42, 0.42));
+  }
+}
+
+.mobile-identity-card {
+  transform: translateZ(0);
+}
+
+.mobile-identity-card::before,
+.mobile-identity-card::after {
+  position: absolute;
+  content: "";
+  pointer-events: none;
+}
+
+.mobile-identity-card::before {
+  inset: 1px;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.mobile-identity-card::after {
+  inset: -66% -24%;
+  background: linear-gradient(
+    112deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.18) 48%,
+    transparent 58%
+  );
+  mix-blend-mode: screen;
+  opacity: 0.72;
+  transform: translate3d(-34%, 0, 0) rotate(7deg);
+  animation: mobile-widget-gloss 7s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.mobile-studio-identity {
+  background-blend-mode: screen, normal;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 24px 64px -42px color-mix(in srgb, var(--theme-primary, #0f172a) 78%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--theme-accent, #30b987) 12%, transparent);
+}
+
+.mobile-studio-identity .mobile-studio-stat-grid {
+  max-width: 15.5rem;
+}
+
+.mobile-studio-stat-grid > div {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
+    color-mix(in srgb, var(--theme-primary, #0f172a) 18%, transparent);
+  backdrop-filter: blur(16px) saturate(1.08);
+}
+
+.mobile-studio-bubble-art {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 22% 18%, color-mix(in srgb, var(--theme-accent, #30b987) 24%, transparent), transparent 34%),
+    radial-gradient(circle at 82% 88%, color-mix(in srgb, var(--theme-primary, #0f172a) 32%, transparent), transparent 46%);
+}
+
+.mobile-studio-bubble-art span {
+  position: absolute;
+  display: block;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.mobile-studio-bubble-art span:nth-child(1) {
+  left: 18%;
+  top: 18%;
+  width: 38%;
+  height: 5px;
+}
+
+.mobile-studio-bubble-art span:nth-child(2) {
+  right: 14%;
+  top: 44%;
+  width: 48%;
+  height: 5px;
+  opacity: 0.62;
+}
+
+.mobile-studio-bubble-art span:nth-child(3) {
+  left: 26%;
+  bottom: 18%;
+  width: 32%;
+  height: 5px;
+  opacity: 0.48;
+}
+
+.mobile-studio-empty {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.mobile-studio-empty::after {
+  position: absolute;
+  inset: auto -18% -24% 32%;
+  z-index: -1;
+  height: 9rem;
+  content: "";
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--theme-accent, #30b987) 18%, transparent),
+    transparent 62%
+  );
+  filter: blur(16px);
+}
+
+.mobile-studio-logo-wrap {
+  display: grid;
+  min-width: 3rem;
+  min-height: 3rem;
+  place-items: center;
+  border-radius: 1.35rem;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.84), rgba(255, 255, 255, 0.5)),
+    linear-gradient(135deg, color-mix(in srgb, var(--theme-primary, #0f172a) 14%, transparent), color-mix(in srgb, var(--theme-accent, #30b987) 12%, transparent));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 16px 34px -28px rgba(15, 23, 42, 0.54);
+}
+
+.mobile-top-header {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.78)),
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--theme-accent, #0ea5e9) 10%, transparent), transparent 38%);
+  box-shadow:
+    inset 0 -1px 0 rgba(255, 255, 255, 0.5),
+    0 18px 46px -36px rgba(15, 23, 42, 0.54);
+}
+
+.mobile-bottom-nav {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.96)),
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--theme-primary, #0f172a) 8%, transparent), transparent 54%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    0 -18px 48px -32px rgba(15, 23, 42, 0.46);
+}
+
+.mobile-bottom-tab {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid transparent;
+  transition:
+    transform 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mobile-bottom-tab::before {
+  position: absolute;
+  inset: 1px;
+  content: "";
+  border-radius: inherit;
+  opacity: 0;
+  background:
+    radial-gradient(circle at 28% 0%, rgba(255, 255, 255, 0.28), transparent 42%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04));
+  transition: opacity 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mobile-bottom-tab.is-active::before {
+  opacity: 1;
+}
+
+.mobile-bottom-tab.is-active {
+  border-color: color-mix(in srgb, var(--tab-color, #0f172a) 24%, white);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 14px 34px -28px color-mix(in srgb, var(--tab-color, #0f172a) 70%, transparent);
+}
+
+.mobile-bottom-tab > * {
+  position: relative;
+  z-index: 1;
+}
+
+.mobile-slate-option {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, var(--slate-wash, #f8fafc), rgba(255, 255, 255, 0.98) 58%, color-mix(in srgb, var(--slate-accent, #30b987) 9%, white));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.84),
+    0 16px 34px -31px color-mix(in srgb, var(--slate-primary, #0f172a) 42%, transparent);
+}
+
+.mobile-slate-option::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  content: "";
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--slate-accent, #30b987) 20%, transparent), transparent 46%),
+    linear-gradient(112deg, transparent 0 55%, rgba(255, 255, 255, 0.34) 55.4% 56.5%, transparent 57%);
+  opacity: 0.9;
+}
+
+.mobile-slate-option::after {
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  content: "";
+  background: linear-gradient(90deg, var(--slate-primary, #0f172a), var(--slate-accent, #30b987));
+  opacity: 0.72;
+}
+
+.mobile-slate-option.is-active {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 18px 40px -30px color-mix(in srgb, var(--slate-primary, #0f172a) 62%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--slate-accent, #30b987) 18%, transparent);
 }
 
 .mobile-course-card,
@@ -1106,7 +1359,7 @@ textarea {
   border-color: rgba(255, 255, 255, 0.78);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.86),
-    0 18px 42px -34px color-mix(in srgb, var(--course-accent, var(--theme-primary, #0f172a)) 36%, #0f172a);
+    0 18px 42px -34px color-mix(in srgb, var(--course-accent, var(--theme-primary, #0f172a)) 28%, #0f172a);
 }
 
 .mobile-course-card::before,
@@ -1119,7 +1372,7 @@ textarea {
   background:
     radial-gradient(
       circle at 3% 0%,
-      color-mix(in srgb, var(--course-accent, var(--theme-primary, #0f172a)) 10%, transparent),
+      color-mix(in srgb, var(--course-accent, var(--theme-primary, #0f172a)) 7%, transparent),
       transparent 40%
     ),
     linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.91));
@@ -1135,7 +1388,7 @@ textarea {
   pointer-events: none;
   background: radial-gradient(
     circle,
-    color-mix(in srgb, var(--course-accent, var(--theme-primary, #0f172a)) 8%, transparent),
+    color-mix(in srgb, var(--course-accent, var(--theme-primary, #0f172a)) 6%, transparent),
     transparent 68%
   );
   filter: blur(16px);

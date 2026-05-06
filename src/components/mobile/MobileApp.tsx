@@ -158,19 +158,19 @@ const statusOptions: Array<{ id: AssignmentStatus; label: string }> = [
 const semesterYears = ["Year 1", "Year 2", "Year 3", "Year 4"] as const;
 const semesterTerms = ["Fall", "Winter", "Summer"] as const;
 const semesterColors = [
-  "#334155",
-  "#0f766e",
-  "#1d4ed8",
-  "#475569",
-  "#64748b",
-  "#115e59",
-  "#2563eb",
-  "#52525b",
-  "#0f766e",
-  "#334155",
-  "#1d4ed8",
-  "#475569",
-  "#64748b",
+  "#3f6f68",
+  "#4b63a3",
+  "#76558f",
+  "#9a5864",
+  "#8a6f3a",
+  "#4f7c55",
+  "#3b7291",
+  "#5f6472",
+  "#7c5b71",
+  "#956044",
+  "#52756a",
+  "#596a9a",
+  "#6f6256",
 ] as const;
 
 const MOBILE_MODE_SNAPSHOT_KEY = "markmate-mobile-mode-snapshots-v1";
@@ -2404,12 +2404,14 @@ function EmptyCustomStructure({
   onAddYear: () => void;
 }) {
   return (
-    <section className="rounded-[1.6rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
+    <section className="mobile-premium-panel mobile-studio-empty rounded-[1.6rem] border border-white/70 bg-white/95 p-4 shadow-soft backdrop-blur">
       <div className="flex items-start gap-4">
-        <MarkMateLogo size="md" className="shrink-0" />
+        <div className="mobile-studio-logo-wrap shrink-0">
+          <MarkMateLogo size="md" />
+        </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-            Custom setup
+            Studio setup
           </p>
           <h2 className="mt-1 text-2xl font-black tracking-tight">
             Build your year first.
@@ -2418,6 +2420,21 @@ function EmptyCustomStructure({
             Add any year, any semester, then place courses inside it.
           </p>
         </div>
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-1.5">
+        {["Years", "Terms", "Courses"].map((item) => (
+          <div
+            key={item}
+            className="rounded-2xl border border-white/70 bg-white/68 px-2.5 py-2 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.82)]"
+          >
+            <span className="block text-[0.62rem] font-black uppercase tracking-wide text-slate-400">
+              {item}
+            </span>
+            <span className="mt-0.5 block text-sm font-black text-slate-950">
+              Open
+            </span>
+          </div>
+        ))}
       </div>
       <button
         type="button"
@@ -2457,10 +2474,17 @@ function MobileIdentityCard({
   const campusBubbleLayer = activeTheme.backgroundImage
     ? `linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.24)), url(${activeTheme.backgroundImage})`
     : `radial-gradient(circle at 25% 20%, ${brandPalette.logoAccent}, transparent 48%), linear-gradient(135deg, ${brandPalette.logoPrimary}, #0f172a)`;
+  const customStats = [
+    { label: "Terms", value: semesterCount > 0 ? `${semesterCount}` : "Open" },
+    { label: "Courses", value: `${courseCount}` },
+    { label: "Slate", value: activeTheme.label.replace(/\s+Slate$/i, "") },
+  ];
 
   return (
     <section
-      className="relative overflow-hidden rounded-[1.75rem] border border-white/70 bg-slate-950 p-3 text-white shadow-[0_20px_56px_-36px_rgba(15,23,42,0.72)]"
+      className={`mobile-identity-card relative overflow-hidden rounded-[1.75rem] border border-white/70 bg-slate-950 p-3 text-white shadow-[0_20px_56px_-36px_rgba(15,23,42,0.72)] ${
+        appMode === "custom" ? "mobile-studio-identity" : ""
+      }`}
       style={{
         backgroundImage: imageLayer,
         backgroundPosition: activeTheme.position ?? "center",
@@ -2497,8 +2521,26 @@ function MobileIdentityCard({
               </div>
             </div>
             <p className="mt-3 text-sm font-bold leading-snug text-white/70">
-              {courseCount} courses / {semesterCount} semesters
+              {courseCount} courses / {semesterCount}{" "}
+              {appMode === "custom" ? "terms" : "semesters"}
             </p>
+            {appMode === "custom" && (
+              <div className="mobile-studio-stat-grid mt-3 grid grid-cols-3 gap-1.5">
+                {customStats.map((stat) => (
+                  <div
+                    key={stat.label}
+                    className="rounded-xl border border-white/12 bg-white/8 px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]"
+                  >
+                    <span className="block text-[0.56rem] font-black uppercase tracking-wide text-white/42">
+                      {stat.label}
+                    </span>
+                    <span className="mt-0.5 block truncate text-[0.72rem] font-black text-white">
+                      {stat.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="mt-3 grid grid-cols-2 gap-1 rounded-2xl border border-white/20 bg-white/10 p-1 backdrop-blur">
               {[
                 { id: "custom", label: "Custom" },
@@ -2524,7 +2566,7 @@ function MobileIdentityCard({
             </div>
           </div>
           <div
-            className="pointer-events-none min-h-32 rounded-[1.45rem] border border-white/20 bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]"
+            className="pointer-events-none relative min-h-32 overflow-hidden rounded-[1.45rem] border border-white/20 bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]"
             style={{
               backgroundImage: campusBubbleLayer,
               backgroundPosition: activeTheme.backgroundImage
@@ -2535,6 +2577,13 @@ function MobileIdentityCard({
             aria-hidden="true"
           >
             <div className="h-full rounded-[1.45rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(2,6,23,0.22))]" />
+            {appMode === "custom" && (
+              <div className="mobile-studio-bubble-art">
+                <span />
+                <span />
+                <span />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -2711,7 +2760,7 @@ function MobileHomeCommandPanel({
   );
 
   return (
-    <section className="rounded-[1.55rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
+    <section className="mobile-premium-panel rounded-[1.55rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-black uppercase tracking-wide text-slate-500">
@@ -3232,7 +3281,7 @@ function MobileCourses({
             </button>
           </div>
           <p className="mt-2 rounded-2xl bg-slate-50 px-3 py-2 text-xs font-black text-slate-500">
-            {yearFolders.length} semesters / {yearCourseCount} courses
+            {yearFolders.length} terms / {yearCourseCount} courses
           </p>
         </section>
 
@@ -3430,7 +3479,7 @@ function MobileCourses({
                       {group.year}
                     </span>
                     <span className="mt-0.5 block text-[0.68rem] font-black text-slate-400">
-                      {group.folders.length} semesters / {yearCourseCount} courses
+                      {group.folders.length} terms / {yearCourseCount} courses
                     </span>
                   </button>
                   <button
@@ -6067,15 +6116,16 @@ function MobileSettings() {
                   <button
                     key={option.id}
                     type="button"
-                    className={`min-h-[4rem] rounded-2xl border p-2.5 text-left active:scale-[0.99] ${
+                    className={`mobile-slate-option min-h-[4rem] rounded-2xl border p-2.5 text-left active:scale-[0.99] ${
                       active
-                        ? "border-slate-950 text-slate-950 shadow-soft"
+                        ? "is-active border-slate-950 text-slate-950 shadow-soft"
                         : "border-slate-200 text-slate-700"
                     }`}
                     style={{
-                      background:
-                        `linear-gradient(135deg, ${preview.wash}, #ffffff 58%, color-mix(in srgb, ${preview.accent} 10%, white))`,
-                    }}
+                      "--slate-primary": preview.primary,
+                      "--slate-accent": preview.accent,
+                      "--slate-wash": preview.wash,
+                    } as React.CSSProperties}
                     onClick={() => setCustomTheme(option.id)}
                   >
                     <span className="flex items-center gap-1.5">
@@ -6138,7 +6188,7 @@ function MobileSettings() {
                         {group.year}
                       </p>
                       <p className="text-xs font-bold text-slate-400">
-                        {group.folders.length} semesters
+                        {group.folders.length} terms
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
@@ -6435,7 +6485,7 @@ export default function MobileApp() {
   const renderTabHeader = (tab: MobileTab) => {
     const label = mobileTabs.find((item) => item.id === tab)?.label ?? "MarkMate";
     return (
-      <header className="sticky top-0 z-20 -mx-5 mb-4 border-b border-white/70 bg-white/86 px-5 pb-3 pt-[calc(env(safe-area-inset-top)+0.6rem)] shadow-[0_16px_42px_-34px_rgba(15,23,42,0.5)] backdrop-blur">
+      <header className="mobile-top-header sticky top-0 z-20 -mx-5 mb-4 border-b border-white/70 bg-white/86 px-5 pb-3 pt-[calc(env(safe-area-inset-top)+0.6rem)] shadow-[0_16px_42px_-34px_rgba(15,23,42,0.5)] backdrop-blur">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -6529,7 +6579,7 @@ export default function MobileApp() {
 
       {!showCourseDetail && !keyboardOpen && (
         <nav
-          className="fixed inset-x-0 bottom-0 z-20 border-t border-white/70 bg-white/90 px-3 pb-[calc(env(safe-area-inset-bottom)+0.85rem)] pt-2.5 shadow-[0_-18px_44px_-28px_rgba(15,23,42,0.45)] backdrop-blur"
+          className="mobile-bottom-nav fixed inset-x-0 bottom-0 z-20 border-t border-white/70 bg-white/90 px-3 pb-[calc(env(safe-area-inset-bottom)+0.85rem)] pt-2.5 shadow-[0_-18px_44px_-28px_rgba(15,23,42,0.45)] backdrop-blur"
           style={{ position: "fixed", zIndex: 20 }}
         >
           <div className="mx-auto grid max-w-md grid-cols-5 gap-1">
@@ -6540,13 +6590,14 @@ export default function MobileApp() {
                 <button
                   key={tab.id}
                   type="button"
-                  className={`flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl text-xs font-bold transition focus:outline-none active:scale-[0.98] ${
-                    active ? "text-white" : "bg-transparent text-slate-500"
+                  className={`mobile-bottom-tab flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl text-xs font-bold transition focus:outline-none active:scale-[0.98] ${
+                    active ? "is-active text-white" : "bg-transparent text-slate-500"
                   }`}
                   style={{
+                    "--tab-color": activeTheme.primaryColor,
                     backgroundColor: active ? activeTheme.primaryColor : "transparent",
                     WebkitTapHighlightColor: "transparent",
-                  }}
+                  } as React.CSSProperties}
                   onClick={() => goToTab(tab.id)}
                 >
                   <Icon className="h-5 w-5" />
