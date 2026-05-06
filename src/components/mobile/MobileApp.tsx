@@ -130,7 +130,7 @@ const universityOptions = [
 ] as const;
 
 const customThemeOptions = [
-  { id: "classic", label: "Graphite Glass" },
+  { id: "classic", label: "Opal Studio" },
   { id: "aurora", label: "Sage Glass" },
   { id: "neon", label: "Blue Steel" },
   { id: "paper", label: "Ivory Desk" },
@@ -1185,7 +1185,7 @@ function customSlatePreview(themeId: string) {
     string,
     { primary: string; accent: string; wash: string }
   > = {
-    classic: { primary: "#111827", accent: "#4fc6a4", wash: "#f7f9fb" },
+    classic: { primary: "#23343d", accent: "#68d8b8", wash: "#f6fbfa" },
     aurora: { primary: "#21413d", accent: "#8ad8c4", wash: "#f3fbf8" },
     neon: { primary: "#1f3a5f", accent: "#78a9d6", wash: "#f4f8fb" },
     paper: { primary: "#4a4438", accent: "#c8a765", wash: "#fbf8ef" },
@@ -2468,13 +2468,20 @@ function MobileIdentityCard({
     universityThemeId,
     customThemeId
   );
-  const imageLayer = activeTheme.backgroundImage
-    ? `linear-gradient(90deg, rgba(15,23,42,0.92), rgba(15,23,42,0.62)), url(${activeTheme.backgroundImage})`
-    : `linear-gradient(135deg, color-mix(in srgb, ${brandPalette.logoPrimary} 34%, #020617), #0f172a 58%, color-mix(in srgb, ${brandPalette.logoAccent} 28%, #1e293b))`;
-  const campusBubbleLayer = activeTheme.backgroundImage
-    ? `linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.24)), url(${activeTheme.backgroundImage})`
-    : `radial-gradient(circle at 25% 20%, ${brandPalette.logoAccent}, transparent 48%), linear-gradient(135deg, ${brandPalette.logoPrimary}, #0f172a)`;
-  const customStyleLabel = activeTheme.label.split(/\s+/).slice(1).join(" ");
+  const isCustomMode = appMode === "custom";
+  const displayLabel = isCustomMode ? "MarkMate" : activeTheme.label;
+  const displayEyebrow = isCustomMode ? "Custom studio" : "MarkMate";
+  const imageLayer = isCustomMode
+    ? `radial-gradient(circle at 82% 12%, color-mix(in srgb, ${brandPalette.logoAccent} 28%, transparent), transparent 32%), radial-gradient(circle at 12% 0%, rgba(255,255,255,0.92), transparent 34%), linear-gradient(135deg, rgba(255,255,255,0.86), rgba(255,255,255,0.55) 52%, color-mix(in srgb, ${brandPalette.logoPrimary} 12%, white))`
+    : activeTheme.backgroundImage
+      ? `linear-gradient(90deg, rgba(15,23,42,0.92), rgba(15,23,42,0.62)), url(${activeTheme.backgroundImage})`
+      : `linear-gradient(135deg, color-mix(in srgb, ${brandPalette.logoPrimary} 34%, #020617), #0f172a 58%, color-mix(in srgb, ${brandPalette.logoAccent} 28%, #1e293b))`;
+  const campusBubbleLayer = isCustomMode
+    ? `radial-gradient(circle at 22% 18%, color-mix(in srgb, ${brandPalette.logoAccent} 72%, white), transparent 42%), radial-gradient(circle at 92% 86%, color-mix(in srgb, ${brandPalette.logoPrimary} 48%, transparent), transparent 54%), linear-gradient(135deg, color-mix(in srgb, ${brandPalette.logoPrimary} 18%, white), color-mix(in srgb, ${brandPalette.logoAccent} 10%, white))`
+    : activeTheme.backgroundImage
+      ? `linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.24)), url(${activeTheme.backgroundImage})`
+      : `radial-gradient(circle at 25% 20%, ${brandPalette.logoAccent}, transparent 48%), linear-gradient(135deg, ${brandPalette.logoPrimary}, #0f172a)`;
+  const customStyleLabel = activeTheme.label.replace(/\s+(Glass|Studio|Desk)$/i, "");
   const customStats = [
     { label: "Terms", value: semesterCount > 0 ? `${semesterCount}` : "Open" },
     { label: "Courses", value: `${courseCount}` },
@@ -2483,8 +2490,10 @@ function MobileIdentityCard({
 
   return (
     <section
-      className={`mobile-identity-card relative overflow-hidden rounded-[1.75rem] border border-white/70 bg-slate-950 p-3 text-white shadow-[0_20px_56px_-36px_rgba(15,23,42,0.72)] ${
-        appMode === "custom" ? "mobile-studio-identity" : ""
+      className={`mobile-identity-card relative overflow-hidden rounded-[1.75rem] border p-3 shadow-[0_20px_56px_-36px_rgba(15,23,42,0.72)] ${
+        isCustomMode
+          ? "mobile-studio-identity border-white/90 bg-white/75 text-slate-950"
+          : "border-white/70 bg-slate-950 text-white"
       }`}
       style={{
         backgroundImage: imageLayer,
@@ -2492,7 +2501,13 @@ function MobileIdentityCard({
         backgroundSize: "cover",
       }}
     >
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.12),transparent_52%,rgba(2,6,23,0.28))]" />
+      <div
+        className={`absolute inset-0 ${
+          isCustomMode
+            ? "bg-[linear-gradient(180deg,rgba(255,255,255,0.24),transparent_54%,rgba(255,255,255,0.18))]"
+            : "bg-[linear-gradient(180deg,rgba(255,255,255,0.12),transparent_52%,rgba(2,6,23,0.28))]"
+        }`}
+      />
       <div className="relative">
         <div className="grid grid-cols-[1fr_7rem] gap-3">
           <div className="min-w-0">
@@ -2504,24 +2519,32 @@ function MobileIdentityCard({
                   triggerMobileHaptic("selection");
                   onOpenIdentity();
                 }}
-                aria-label={`About ${activeTheme.label}`}
+                aria-label={`About ${displayLabel}`}
               >
                 <MobileSchoolMark
-                  themeId={activeTheme.id}
-                  label={activeTheme.label}
-                  className="ring-white/35"
+                  themeId={isCustomMode ? "markmate" : activeTheme.id}
+                  label={displayLabel}
+                  className={isCustomMode ? "ring-slate-900/10" : "ring-white/35"}
                 />
               </button>
               <div className="min-w-0">
-                <p className="text-xs font-black uppercase tracking-[0.18em] text-white/60">
-                  MarkMate
+                <p
+                  className={`text-xs font-black uppercase tracking-[0.18em] ${
+                    isCustomMode ? "text-slate-500" : "text-white/60"
+                  }`}
+                >
+                  {displayEyebrow}
                 </p>
                 <h1 className="text-[1.35rem] font-black leading-tight tracking-tight">
-                  {activeTheme.label}
+                  {displayLabel}
                 </h1>
               </div>
             </div>
-            <p className="mt-3 text-sm font-bold leading-snug text-white/70">
+            <p
+              className={`mt-3 text-sm font-bold leading-snug ${
+                isCustomMode ? "text-slate-500" : "text-white/70"
+              }`}
+            >
               {courseCount} courses / {semesterCount}{" "}
               {appMode === "custom" ? "terms" : "semesters"}
             </p>
@@ -2530,19 +2553,25 @@ function MobileIdentityCard({
                 {customStats.map((stat) => (
                   <div
                     key={stat.label}
-                    className="rounded-xl border border-white/12 bg-white/8 px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]"
+                    className="rounded-xl border border-slate-900/10 bg-white/62 px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]"
                   >
-                    <span className="block text-[0.56rem] font-black uppercase tracking-wide text-white/42">
+                    <span className="block text-[0.56rem] font-black uppercase tracking-wide text-slate-400">
                       {stat.label}
                     </span>
-                    <span className="mt-0.5 block truncate text-[0.72rem] font-black text-white">
+                    <span className="mt-0.5 block truncate text-[0.72rem] font-black text-slate-950">
                       {stat.value}
                     </span>
                   </div>
                 ))}
               </div>
             )}
-            <div className="mt-3 grid grid-cols-2 gap-1 rounded-2xl border border-white/20 bg-white/10 p-1 backdrop-blur">
+            <div
+              className={`mt-3 grid grid-cols-2 gap-1 rounded-2xl border p-1 ${
+                isCustomMode
+                  ? "border-slate-900/10 bg-white/62"
+                  : "border-white/20 bg-white/10 backdrop-blur"
+              }`}
+            >
               {[
                 { id: "custom", label: "Custom" },
                 { id: "university", label: "School" },
@@ -2553,7 +2582,13 @@ function MobileIdentityCard({
                     key={option.id}
                     type="button"
                     className={`min-h-9 rounded-xl text-xs font-black active:scale-[0.98] ${
-                      active ? "bg-white text-slate-950" : "text-white/70"
+                      active
+                        ? isCustomMode
+                          ? "bg-slate-950 text-white shadow-[0_12px_26px_-20px_rgba(15,23,42,0.72)]"
+                          : "bg-white text-slate-950"
+                        : isCustomMode
+                          ? "text-slate-500"
+                          : "text-white/70"
                     }`}
                     onClick={() => {
                       if (!active) triggerMobileHaptic("mode");
@@ -2567,7 +2602,9 @@ function MobileIdentityCard({
             </div>
           </div>
           <div
-            className="pointer-events-none relative min-h-32 overflow-hidden rounded-[1.45rem] border border-white/20 bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]"
+            className={`pointer-events-none relative min-h-32 overflow-hidden rounded-[1.45rem] border bg-cover bg-center shadow-[inset_0_1px_0_rgba(255,255,255,0.22)] ${
+              isCustomMode ? "border-white/70" : "border-white/20"
+            }`}
             style={{
               backgroundImage: campusBubbleLayer,
               backgroundPosition: activeTheme.backgroundImage
@@ -2577,7 +2614,13 @@ function MobileIdentityCard({
             }}
             aria-hidden="true"
           >
-            <div className="h-full rounded-[1.45rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(2,6,23,0.22))]" />
+            <div
+              className={`h-full rounded-[1.45rem] ${
+                isCustomMode
+                  ? "bg-[linear-gradient(180deg,rgba(255,255,255,0.32),rgba(255,255,255,0.06))]"
+                  : "bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(2,6,23,0.22))]"
+              }`}
+            />
             {appMode === "custom" && (
               <div className="mobile-studio-bubble-art">
                 <span />
@@ -2924,7 +2967,7 @@ function MobileDashboard({
         onClose={() => setIdentityOpen(false)}
         mode={appMode}
         themeId={appMode === "university" ? universityThemeId : "markmate"}
-        label={activeTheme.label}
+        label={appMode === "custom" ? "MarkMate" : activeTheme.label}
       />
     </div>
   );
@@ -6488,6 +6531,7 @@ export default function MobileApp() {
 
   const renderTabHeader = (tab: MobileTab) => {
     const label = mobileTabs.find((item) => item.id === tab)?.label ?? "MarkMate";
+    const headerBrandLabel = appMode === "custom" ? "MarkMate" : activeTheme.label;
     return (
       <header className="mobile-top-header sticky top-0 z-20 -mx-5 mb-4 border-b border-white/70 bg-white/86 px-5 pb-3 pt-[calc(env(safe-area-inset-top)+0.6rem)] shadow-[0_16px_42px_-34px_rgba(15,23,42,0.5)] backdrop-blur">
         <div className="flex items-center gap-3">
@@ -6498,16 +6542,16 @@ export default function MobileApp() {
               triggerMobileHaptic("selection");
               setHeaderIdentityOpen(true);
             }}
-            aria-label={`About ${activeTheme.label}`}
+            aria-label={`About ${headerBrandLabel}`}
           >
             <MobileSchoolMark
               themeId={appMode === "university" ? activeTheme.id : "markmate"}
-              label={activeTheme.label}
+              label={headerBrandLabel}
             />
           </button>
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs font-black uppercase tracking-[0.18em] text-slate-500">
-              {activeTheme.label}
+              {headerBrandLabel}
             </p>
             <h1 className="truncate text-xl font-black tracking-tight">
               {label}
@@ -6619,7 +6663,7 @@ export default function MobileApp() {
         onClose={() => setHeaderIdentityOpen(false)}
         mode={appMode}
         themeId={appMode === "university" ? universityThemeId : "markmate"}
-        label={activeTheme.label}
+        label={appMode === "custom" ? "MarkMate" : activeTheme.label}
       />
       <MobileCourseCreateSheet
         open={courseCreateOpen}

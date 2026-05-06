@@ -16,11 +16,11 @@ export function MarkMateLogo({
 }: MarkMateLogoProps) {
   return (
     <span
-      className={`relative inline-grid shrink-0 place-items-center overflow-hidden text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_18px_34px_-24px_rgba(15,23,42,0.72)] ring-1 ring-white/20 ${sizeClass[size]} ${className}`}
+      className={`relative inline-grid shrink-0 place-items-center overflow-hidden text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.28),inset_0_-1px_0_rgba(255,255,255,0.08),0_18px_34px_-24px_rgba(15,23,42,0.72)] ring-1 ring-white/25 ${sizeClass[size]} ${className}`}
       aria-hidden="true"
       style={{
         background:
-          "linear-gradient(145deg, #020617 0%, color-mix(in srgb, var(--markmate-logo-primary, #fb7185) 42%, #0f172a) 58%, #111827 100%)",
+          "radial-gradient(circle at 22% 12%, color-mix(in srgb, var(--markmate-logo-accent, #34d399) 34%, transparent), transparent 34%), linear-gradient(145deg, color-mix(in srgb, var(--markmate-logo-primary, #8f5368) 52%, #0f172a) 0%, #111827 54%, color-mix(in srgb, var(--markmate-logo-accent, #34d399) 34%, #0f172a) 100%)",
       }}
     >
       <span
@@ -38,14 +38,16 @@ export function MarkMateLogo({
         }}
       />
       <span
-        className="absolute inset-x-0 bottom-0 h-[18%]"
+        className="absolute inset-x-[16%] bottom-[12%] h-[8%] rounded-full"
         style={{
           background:
             "linear-gradient(90deg, var(--markmate-logo-primary, #fb7185), var(--markmate-logo-accent, #34d399))",
+          boxShadow:
+            "0 8px 18px -10px var(--markmate-logo-accent, #34d399)",
         }}
       />
       <svg
-        className="relative h-[70%] w-[70%]"
+        className="relative h-[70%] w-[70%] drop-shadow-[0_10px_16px_rgba(2,6,23,0.22)]"
         viewBox="0 0 42 42"
         fill="none"
         role="img"
@@ -53,7 +55,7 @@ export function MarkMateLogo({
         <path
           d="M7 31V11l7 8 7-8v20"
           stroke="currentColor"
-          strokeWidth="4.4"
+          strokeWidth="4"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -61,14 +63,14 @@ export function MarkMateLogo({
           d="M21 31V11l7 8 7-8v20"
           stroke="currentColor"
           strokeOpacity="0.76"
-          strokeWidth="4.4"
+          strokeWidth="4"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
         <path
-          d="M13 32h16"
+          d="M12.5 31.5c4.8 3 12.2 3 17 0"
           stroke="var(--markmate-logo-accent, #34d399)"
-          strokeWidth="3.4"
+          strokeWidth="3.1"
           strokeLinecap="round"
         />
       </svg>

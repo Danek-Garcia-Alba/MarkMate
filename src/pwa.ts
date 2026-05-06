@@ -13,7 +13,7 @@ export function registerServiceWorker() {
     });
 
     navigator.serviceWorker
-      .register("/sw.js?markmate-pwa-v11", { scope: "/" })
+      .register("/sw.js?markmate-pwa-v12", { scope: "/" })
       .then((registration) => {
         const activateFreshWorker = (worker?: ServiceWorker | null) => {
           worker?.postMessage({ type: "SKIP_WAITING" });

@@ -469,11 +469,11 @@ const REAL_UNIVERSITY_THEME_OPTIONS = UNIVERSITY_THEME_OPTIONS.filter(
 const CUSTOM_THEMES: Record<CustomThemeId, CustomTheme> = {
   classic: {
     id: "classic",
-    label: "Graphite Glass",
-    tagline: "Soft graphite, mint glass, and clean study focus.",
+    label: "Opal Studio",
+    tagline: "Soft graphite, opal glass, and a calmer MarkMate glow.",
     backgroundImage: "",
-    primaryColor: "#111827",
-    accentColor: "#4fc6a4",
+    primaryColor: "#23343d",
+    accentColor: "#68d8b8",
     overlay: "rgba(248, 250, 252, 0.9)",
   },
   aurora: {
@@ -561,11 +561,11 @@ type MarkMateBrandPalette = {
 };
 
 const CUSTOM_MARKMATE_BRAND: MarkMateBrandPalette = {
-  logoPrimary: "#8f5368",
-  logoAccent: "#4fc6a4",
+  logoPrimary: "#7b5368",
+  logoAccent: "#68d8b8",
   wordStart: "#111827",
-  wordMid: "#8f5368",
-  wordEnd: "#4f9b7d",
+  wordMid: "#7b5368",
+  wordEnd: "#389979",
 };
 
 const CUSTOM_MARKMATE_BRANDS: Record<CustomThemeId, MarkMateBrandPalette> = {
