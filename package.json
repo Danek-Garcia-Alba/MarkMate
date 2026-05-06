@@ -6,25 +6,36 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "video:capture": "node scripts/capture-promo-screens.mjs",
+    "video:audio": "node scripts/generate-promo-audio.mjs",
+    "video:preview": "remotion studio src/remotion/index.ts",
+    "video:render": "npm run video:capture && npm run video:audio && node scripts/render-promo.mjs",
+    "video:install": "node scripts/render-install-demo.mjs"
   },
   "dependencies": {
     "@fullcalendar/daygrid": "^6.1.18",
     "@fullcalendar/interaction": "^6.1.18",
     "@fullcalendar/react": "^6.1.18",
+    "@react-spring/web": "^9.7.5",
+    "@use-gesture/react": "^10.3.1",
     "canvas-confetti": "^1.9.3",
+    "ios-haptics": "^0.1.5",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zustand": "^4.5.5"
   },
   "devDependencies": {
+    "@remotion/cli": "^4.0.455",
     "@types/canvas-confetti": "^1.9.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.4.20",
+    "playwright": "^1.59.1",
     "postcss": "^8.4.49",
+    "remotion": "^4.0.455",
     "tailwindcss": "^3.4.15",
     "typescript": "^5.6.3",
     "vite": "^8.0.10"

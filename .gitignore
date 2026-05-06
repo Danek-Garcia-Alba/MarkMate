@@ -1,5 +1,7 @@
 node_modules/
 dist/
+out/
+public/remotion-captures/
 *.tsbuildinfo
 vite-dev.*.log
 .pnpm-debug.log
@@ -10,3 +12,4 @@ vite.config.d.ts
 .env.*
 !.env.example
 .codex*.png
+.codex*.cjs
