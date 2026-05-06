@@ -130,15 +130,15 @@ const universityOptions = [
 ] as const;
 
 const customThemeOptions = [
-  { id: "classic", label: "Studio Slate" },
-  { id: "aurora", label: "Mint Slate" },
-  { id: "neon", label: "Blue Lab" },
-  { id: "paper", label: "Paper Desk" },
-  { id: "sunset", label: "Rose Glass" },
-  { id: "midnight", label: "Night Focus" },
-  { id: "bloom", label: "Bloom" },
-  { id: "circuit", label: "Circuit" },
-  { id: "meadow", label: "Meadow" },
+  { id: "classic", label: "Graphite Glass" },
+  { id: "aurora", label: "Sage Glass" },
+  { id: "neon", label: "Blue Steel" },
+  { id: "paper", label: "Ivory Desk" },
+  { id: "sunset", label: "Clay Rose" },
+  { id: "midnight", label: "Night Glass" },
+  { id: "bloom", label: "Mulberry" },
+  { id: "circuit", label: "Cobalt" },
+  { id: "meadow", label: "Olive" },
 ] as const;
 
 const gradeModeOptions: Array<{ id: GradeMode; label: string }> = [
@@ -1185,15 +1185,15 @@ function customSlatePreview(themeId: string) {
     string,
     { primary: string; accent: string; wash: string }
   > = {
-    classic: { primary: "#0f172a", accent: "#34d399", wash: "#f8fafc" },
-    aurora: { primary: "#172033", accent: "#2dd4bf", wash: "#f0fdfa" },
-    neon: { primary: "#1e3a8a", accent: "#38bdf8", wash: "#eff6ff" },
-    paper: { primary: "#1f2933", accent: "#16a34a", wash: "#fffbeb" },
-    sunset: { primary: "#be123c", accent: "#fb7185", wash: "#fff1f2" },
-    midnight: { primary: "#020617", accent: "#f59e0b", wash: "#f8fafc" },
-    bloom: { primary: "#be123c", accent: "#0f766e", wash: "#fff7fa" },
-    circuit: { primary: "#1d4ed8", accent: "#475569", wash: "#f4f8ff" },
-    meadow: { primary: "#166534", accent: "#b45309", wash: "#f6fcf7" },
+    classic: { primary: "#111827", accent: "#4fc6a4", wash: "#f7f9fb" },
+    aurora: { primary: "#21413d", accent: "#8ad8c4", wash: "#f3fbf8" },
+    neon: { primary: "#1f3a5f", accent: "#78a9d6", wash: "#f4f8fb" },
+    paper: { primary: "#4a4438", accent: "#c8a765", wash: "#fbf8ef" },
+    sunset: { primary: "#663c4f", accent: "#d7978a", wash: "#fbf4f2" },
+    midnight: { primary: "#111827", accent: "#b8c7d9", wash: "#f4f7fb" },
+    bloom: { primary: "#56344e", accent: "#c98ca3", wash: "#fbf5f8" },
+    circuit: { primary: "#263a59", accent: "#79b8c8", wash: "#f2f8fa" },
+    meadow: { primary: "#344d3d", accent: "#a6c48a", wash: "#f5faf3" },
   };
   return previews[themeId] ?? previews.classic;
 }
@@ -2474,10 +2474,11 @@ function MobileIdentityCard({
   const campusBubbleLayer = activeTheme.backgroundImage
     ? `linear-gradient(180deg, rgba(15,23,42,0.08), rgba(15,23,42,0.24)), url(${activeTheme.backgroundImage})`
     : `radial-gradient(circle at 25% 20%, ${brandPalette.logoAccent}, transparent 48%), linear-gradient(135deg, ${brandPalette.logoPrimary}, #0f172a)`;
+  const customStyleLabel = activeTheme.label.split(/\s+/).slice(1).join(" ");
   const customStats = [
     { label: "Terms", value: semesterCount > 0 ? `${semesterCount}` : "Open" },
     { label: "Courses", value: `${courseCount}` },
-    { label: "Slate", value: activeTheme.label.replace(/\s+Slate$/i, "") },
+    { label: "Finish", value: customStyleLabel || activeTheme.label },
   ];
 
   return (
@@ -2515,7 +2516,7 @@ function MobileIdentityCard({
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-white/60">
                   MarkMate
                 </p>
-                <h1 className="truncate text-2xl font-black tracking-tight">
+                <h1 className="text-[1.35rem] font-black leading-tight tracking-tight">
                   {activeTheme.label}
                 </h1>
               </div>
@@ -6106,7 +6107,7 @@ function MobileSettings() {
           <section className="rounded-[1.55rem] border border-white/70 bg-white/95 p-3 shadow-soft backdrop-blur">
             <div className="mb-3 flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-slate-400" />
-              <h2 className="text-lg font-black tracking-tight">Slates</h2>
+              <h2 className="text-lg font-black tracking-tight">Finishes</h2>
             </div>
             <div className="grid grid-cols-2 gap-2">
               {customThemeOptions.map((option) => {
@@ -6126,7 +6127,10 @@ function MobileSettings() {
                       "--slate-accent": preview.accent,
                       "--slate-wash": preview.wash,
                     } as React.CSSProperties}
-                    onClick={() => setCustomTheme(option.id)}
+                    onClick={() => {
+                      if (!active) triggerMobileHaptic("selection");
+                      setCustomTheme(option.id);
+                    }}
                   >
                     <span className="flex items-center gap-1.5">
                       <span

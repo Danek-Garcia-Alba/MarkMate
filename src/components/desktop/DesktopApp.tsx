@@ -469,83 +469,83 @@ const REAL_UNIVERSITY_THEME_OPTIONS = UNIVERSITY_THEME_OPTIONS.filter(
 const CUSTOM_THEMES: Record<CustomThemeId, CustomTheme> = {
   classic: {
     id: "classic",
-    label: "Studio Slate",
-    tagline: "Clean, focused, and quietly premium.",
+    label: "Graphite Glass",
+    tagline: "Soft graphite, mint glass, and clean study focus.",
     backgroundImage: "",
-    primaryColor: "#0f172a",
-    accentColor: "#0ea5e9",
+    primaryColor: "#111827",
+    accentColor: "#4fc6a4",
     overlay: "rgba(248, 250, 252, 0.9)",
   },
   aurora: {
     id: "aurora",
-    label: "Mint Slate",
-    tagline: "Soft graphite glass with the classic MarkMate green glow.",
+    label: "Sage Glass",
+    tagline: "Sage glass with a calm, polished study-room tint.",
     backgroundImage: "",
-    primaryColor: "#172033",
-    accentColor: "#2dd4bf",
+    primaryColor: "#21413d",
+    accentColor: "#8ad8c4",
     overlay: "rgba(240, 253, 250, 0.9)",
   },
   neon: {
     id: "neon",
-    label: "Blue Lab",
-    tagline: "Clean academic blue with a crisp technical edge.",
+    label: "Blue Steel",
+    tagline: "Academic blue with a quieter, machined edge.",
     backgroundImage: "",
-    primaryColor: "#312e81",
-    accentColor: "#06b6d4",
+    primaryColor: "#1f3a5f",
+    accentColor: "#78a9d6",
     overlay: "rgba(238, 242, 255, 0.9)",
   },
   paper: {
     id: "paper",
-    label: "Paper Desk",
-    tagline: "Warm paper, deep ink, and a calm green highlight.",
+    label: "Ivory Desk",
+    tagline: "Warm ivory, deep ink, and a quiet brass edge.",
     backgroundImage: "",
-    primaryColor: "#1f2933",
-    accentColor: "#16a34a",
+    primaryColor: "#4a4438",
+    accentColor: "#c8a765",
     overlay: "rgba(255, 251, 235, 0.9)",
   },
   sunset: {
     id: "sunset",
-    label: "Rose Glass",
-    tagline: "MarkMate rose with a polished study-room tint.",
+    label: "Clay Rose",
+    tagline: "A muted rose finish that stays warm, not loud.",
     backgroundImage: "",
-    primaryColor: "#3730a3",
-    accentColor: "#fb7185",
+    primaryColor: "#663c4f",
+    accentColor: "#d7978a",
     overlay: "rgba(255, 247, 237, 0.9)",
   },
   midnight: {
     id: "midnight",
-    label: "Night Focus",
-    tagline: "Navy, graphite, and a quiet gold highlight.",
+    label: "Night Glass",
+    tagline: "Navy glass, silver highlights, and no extra noise.",
     backgroundImage: "",
-    primaryColor: "#020617",
-    accentColor: "#f59e0b",
+    primaryColor: "#111827",
+    accentColor: "#b8c7d9",
     overlay: "rgba(241, 245, 249, 0.9)",
   },
   bloom: {
     id: "bloom",
-    label: "Bloom",
-    tagline: "Soft rose, mint, and warm study-room light.",
+    label: "Mulberry",
+    tagline: "Dusty berry glass with a softer academic glow.",
     backgroundImage: "",
-    primaryColor: "#be123c",
-    accentColor: "#0f766e",
+    primaryColor: "#56344e",
+    accentColor: "#c98ca3",
     overlay: "rgba(255, 247, 250, 0.9)",
   },
   circuit: {
     id: "circuit",
-    label: "Circuit",
-    tagline: "Crisp blue notes with a technical edge.",
+    label: "Cobalt",
+    tagline: "Cobalt, mist, and a technical glass reflection.",
     backgroundImage: "",
-    primaryColor: "#1d4ed8",
-    accentColor: "#475569",
+    primaryColor: "#263a59",
+    accentColor: "#79b8c8",
     overlay: "rgba(244, 248, 255, 0.9)",
   },
   meadow: {
     id: "meadow",
-    label: "Meadow",
-    tagline: "Green, grounded, and calmer than your inbox.",
+    label: "Olive",
+    tagline: "Grounded olive with a soft natural highlight.",
     backgroundImage: "",
-    primaryColor: "#166534",
-    accentColor: "#b45309",
+    primaryColor: "#344d3d",
+    accentColor: "#a6c48a",
     overlay: "rgba(246, 252, 247, 0.9)",
   },
 };
@@ -561,11 +561,71 @@ type MarkMateBrandPalette = {
 };
 
 const CUSTOM_MARKMATE_BRAND: MarkMateBrandPalette = {
-  logoPrimary: "#fb7185",
-  logoAccent: "#34d399",
-  wordStart: "#ec4899",
-  wordMid: "#fb7185",
-  wordEnd: "#10b981",
+  logoPrimary: "#8f5368",
+  logoAccent: "#4fc6a4",
+  wordStart: "#111827",
+  wordMid: "#8f5368",
+  wordEnd: "#4f9b7d",
+};
+
+const CUSTOM_MARKMATE_BRANDS: Record<CustomThemeId, MarkMateBrandPalette> = {
+  classic: CUSTOM_MARKMATE_BRAND,
+  aurora: {
+    logoPrimary: "#21413d",
+    logoAccent: "#8ad8c4",
+    wordStart: "#21413d",
+    wordMid: "#3f746b",
+    wordEnd: "#5bbca7",
+  },
+  neon: {
+    logoPrimary: "#1f3a5f",
+    logoAccent: "#78a9d6",
+    wordStart: "#1f3a5f",
+    wordMid: "#365f8e",
+    wordEnd: "#78a9d6",
+  },
+  paper: {
+    logoPrimary: "#4a4438",
+    logoAccent: "#c8a765",
+    wordStart: "#3f3a30",
+    wordMid: "#7b6844",
+    wordEnd: "#b4914f",
+  },
+  sunset: {
+    logoPrimary: "#663c4f",
+    logoAccent: "#d7978a",
+    wordStart: "#663c4f",
+    wordMid: "#9f6470",
+    wordEnd: "#d7978a",
+  },
+  midnight: {
+    logoPrimary: "#111827",
+    logoAccent: "#b8c7d9",
+    wordStart: "#111827",
+    wordMid: "#475569",
+    wordEnd: "#94a3b8",
+  },
+  bloom: {
+    logoPrimary: "#56344e",
+    logoAccent: "#c98ca3",
+    wordStart: "#56344e",
+    wordMid: "#8f5f7a",
+    wordEnd: "#c98ca3",
+  },
+  circuit: {
+    logoPrimary: "#263a59",
+    logoAccent: "#79b8c8",
+    wordStart: "#263a59",
+    wordMid: "#456c86",
+    wordEnd: "#79b8c8",
+  },
+  meadow: {
+    logoPrimary: "#344d3d",
+    logoAccent: "#a6c48a",
+    wordStart: "#344d3d",
+    wordMid: "#5c7850",
+    wordEnd: "#8fac75",
+  },
 };
 
 const UNIVERSITY_MARKMATE_BRANDS: Record<UniversityThemeId, MarkMateBrandPalette> = {
@@ -664,9 +724,14 @@ export function getActiveTheme(
 export function getMarkMateBrandPalette(
   appMode: string,
   universityThemeId: string,
-  _customThemeId: string
+  customThemeId: string
 ): MarkMateBrandPalette {
-  if (appMode !== "university") return CUSTOM_MARKMATE_BRAND;
+  if (appMode !== "university") {
+    return (
+      CUSTOM_MARKMATE_BRANDS[customThemeId as CustomThemeId] ??
+      CUSTOM_MARKMATE_BRAND
+    );
+  }
   const id = universityThemeId === "markmate" ? "uoft" : universityThemeId;
   return (
     UNIVERSITY_MARKMATE_BRANDS[id as UniversityThemeId] ??

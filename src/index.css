@@ -118,13 +118,13 @@ body {
 }
 
 .app-shell[data-app-mode="custom"]::before {
-  opacity: 0.18;
+  opacity: 0.13;
   clip-path: none;
   background:
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--theme-primary) 18%, transparent),
-      color-mix(in srgb, var(--theme-accent) 8%, transparent) 42%,
+      color-mix(in srgb, var(--theme-primary) 12%, transparent),
+      color-mix(in srgb, var(--theme-accent) 6%, transparent) 42%,
       transparent 86%
     );
 }
@@ -132,43 +132,67 @@ body {
 .app-shell[data-app-mode="custom"]::after {
   inset: 0;
   background-image:
-    radial-gradient(circle at 82% 12%, color-mix(in srgb, var(--theme-accent) 16%, transparent), transparent 17rem),
-    radial-gradient(circle at 12% 4%, color-mix(in srgb, var(--theme-primary) 10%, transparent), transparent 15rem),
-    linear-gradient(116deg, transparent 0 24%, rgba(255, 255, 255, 0.3) 24.2% 24.7%, transparent 25% 100%);
+    radial-gradient(circle at 82% 12%, color-mix(in srgb, var(--theme-accent) 12%, transparent), transparent 17rem),
+    radial-gradient(circle at 12% 4%, color-mix(in srgb, var(--theme-primary) 7%, transparent), transparent 15rem),
+    linear-gradient(116deg, transparent 0 24%, rgba(255, 255, 255, 0.26) 24.2% 24.7%, transparent 25% 100%);
   background-size: auto;
-  opacity: 0.42;
+  opacity: 0.34;
   filter: none;
   mask-image: linear-gradient(180deg, black, transparent 72%);
 }
 
+.app-shell[data-app-mode="custom"][data-theme-id="classic"] {
+  background:
+    radial-gradient(circle at 76% 10%, rgba(79, 198, 164, 0.1), transparent 16rem),
+    linear-gradient(135deg, #f8fafc 0%, #eef3f4 100%);
+}
+
 .app-shell[data-app-mode="custom"][data-theme-id="aurora"] {
   background:
-    radial-gradient(circle at 84% 12%, rgba(45, 212, 191, 0.12), transparent 17rem),
-    linear-gradient(135deg, #f8fafc 0%, #edf5f5 100%);
+    radial-gradient(circle at 84% 12%, rgba(138, 216, 196, 0.13), transparent 17rem),
+    linear-gradient(135deg, #f8fafc 0%, #eef7f4 100%);
 }
 
 .app-shell[data-app-mode="custom"][data-theme-id="neon"] {
   background:
-    radial-gradient(circle at 82% 14%, rgba(6, 182, 212, 0.12), transparent 16rem),
-    linear-gradient(135deg, #f8fafc 0%, #eef4fb 100%);
+    radial-gradient(circle at 82% 14%, rgba(120, 169, 214, 0.13), transparent 16rem),
+    linear-gradient(135deg, #f8fafc 0%, #eff5fb 100%);
 }
 
 .app-shell[data-app-mode="custom"][data-theme-id="paper"] {
   background:
-    radial-gradient(circle at 18% 12%, rgba(22, 163, 74, 0.1), transparent 16rem),
-    linear-gradient(135deg, #fafaf8 0%, #f1f5f2 100%);
+    radial-gradient(circle at 18% 12%, rgba(200, 167, 101, 0.14), transparent 16rem),
+    linear-gradient(135deg, #fbfaf6 0%, #f3f1e9 100%);
 }
 
 .app-shell[data-app-mode="custom"][data-theme-id="sunset"] {
   background:
-    radial-gradient(circle at 82% 18%, rgba(251, 113, 133, 0.12), transparent 17rem),
-    linear-gradient(135deg, #fbf8f6 0%, #f3eef1 100%);
+    radial-gradient(circle at 82% 18%, rgba(215, 151, 138, 0.13), transparent 17rem),
+    linear-gradient(135deg, #fbf8f6 0%, #f4eef0 100%);
 }
 
 .app-shell[data-app-mode="custom"][data-theme-id="midnight"] {
   background:
-    radial-gradient(circle at 80% 16%, rgba(15, 23, 42, 0.1), transparent 17rem),
+    radial-gradient(circle at 80% 16%, rgba(184, 199, 217, 0.14), transparent 17rem),
     linear-gradient(135deg, #f8fafc 0%, #e8edf3 100%);
+}
+
+.app-shell[data-app-mode="custom"][data-theme-id="bloom"] {
+  background:
+    radial-gradient(circle at 80% 16%, rgba(201, 140, 163, 0.12), transparent 17rem),
+    linear-gradient(135deg, #faf8fa 0%, #f1edf1 100%);
+}
+
+.app-shell[data-app-mode="custom"][data-theme-id="circuit"] {
+  background:
+    radial-gradient(circle at 80% 16%, rgba(121, 184, 200, 0.13), transparent 17rem),
+    linear-gradient(135deg, #f8fafc 0%, #eef4f7 100%);
+}
+
+.app-shell[data-app-mode="custom"][data-theme-id="meadow"] {
+  background:
+    radial-gradient(circle at 80% 16%, rgba(166, 196, 138, 0.13), transparent 17rem),
+    linear-gradient(135deg, #f8faf7 0%, #eff4ed 100%);
 }
 
 .dark .app-shell {
@@ -1163,9 +1187,10 @@ textarea {
 .mobile-studio-identity {
   background-blend-mode: screen, normal;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    0 24px 64px -42px color-mix(in srgb, var(--theme-primary, #0f172a) 78%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--theme-accent, #30b987) 12%, transparent);
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+    0 24px 64px -42px color-mix(in srgb, var(--theme-primary, #0f172a) 72%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--theme-accent, #30b987) 14%, transparent);
 }
 
 .mobile-studio-identity .mobile-studio-stat-grid {
@@ -1174,9 +1199,8 @@ textarea {
 
 .mobile-studio-stat-grid > div {
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
-    color-mix(in srgb, var(--theme-primary, #0f172a) 18%, transparent);
-  backdrop-filter: blur(16px) saturate(1.08);
+    linear-gradient(145deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05)),
+    color-mix(in srgb, var(--theme-primary, #0f172a) 14%, transparent);
 }
 
 .mobile-studio-bubble-art {
@@ -1185,17 +1209,43 @@ textarea {
   overflow: hidden;
   border-radius: inherit;
   background:
-    radial-gradient(circle at 22% 18%, color-mix(in srgb, var(--theme-accent, #30b987) 24%, transparent), transparent 34%),
-    radial-gradient(circle at 82% 88%, color-mix(in srgb, var(--theme-primary, #0f172a) 32%, transparent), transparent 46%);
+    radial-gradient(circle at 24% 18%, color-mix(in srgb, var(--theme-accent, #30b987) 36%, transparent), transparent 34%),
+    radial-gradient(circle at 78% 82%, color-mix(in srgb, var(--theme-primary, #0f172a) 30%, transparent), transparent 46%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.02));
+}
+
+.mobile-studio-bubble-art::before,
+.mobile-studio-bubble-art::after {
+  position: absolute;
+  content: "";
+  pointer-events: none;
+  border-radius: 999px;
+}
+
+.mobile-studio-bubble-art::before {
+  inset: 11% 14% auto 16%;
+  height: 42%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 18px 34px -30px color-mix(in srgb, var(--theme-accent, #30b987) 60%, transparent);
+}
+
+.mobile-studio-bubble-art::after {
+  inset: -36% -20%;
+  background: linear-gradient(115deg, transparent 42%, rgba(255, 255, 255, 0.2) 49%, transparent 58%);
+  mix-blend-mode: screen;
+  animation: mobile-widget-gloss 7s cubic-bezier(0.16, 1, 0.3, 1) infinite;
 }
 
 .mobile-studio-bubble-art span {
   position: absolute;
   display: block;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.24);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
     0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
@@ -1266,12 +1316,24 @@ textarea {
 }
 
 .mobile-bottom-nav {
+  position: relative;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.96)),
     radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--theme-primary, #0f172a) 8%, transparent), transparent 54%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.86),
     0 -18px 48px -32px rgba(15, 23, 42, 0.46);
+}
+
+.mobile-bottom-nav::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.82), transparent 40%),
+    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.52), transparent);
+  opacity: 0.58;
 }
 
 .mobile-bottom-tab {
@@ -1297,8 +1359,38 @@ textarea {
   transition: opacity 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.mobile-bottom-tab::after {
+  position: absolute;
+  inset: 0.26rem 22% auto;
+  height: 3px;
+  content: "";
+  border-radius: 999px;
+  opacity: 0;
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--tab-color, #0f172a) 34%, white) 22%,
+      rgba(255, 255, 255, 0.96) 48%,
+      color-mix(in srgb, var(--tab-color, #0f172a) 26%, white) 78%,
+      transparent
+    );
+  box-shadow:
+    0 0 12px -4px rgba(255, 255, 255, 0.98),
+    0 7px 20px -10px color-mix(in srgb, var(--tab-color, #0f172a) 54%, transparent);
+  transform: scaleX(0.58);
+  transition:
+    opacity 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 .mobile-bottom-tab.is-active::before {
   opacity: 1;
+}
+
+.mobile-bottom-tab.is-active::after {
+  opacity: 0.96;
+  transform: scaleX(1);
 }
 
 .mobile-bottom-tab.is-active {
@@ -1310,7 +1402,7 @@ textarea {
 
 .mobile-bottom-tab > * {
   position: relative;
-  z-index: 1;
+  z-index: 2;
 }
 
 .mobile-slate-option {
@@ -1318,37 +1410,44 @@ textarea {
   isolation: isolate;
   overflow: hidden;
   background:
-    linear-gradient(135deg, var(--slate-wash, #f8fafc), rgba(255, 255, 255, 0.98) 58%, color-mix(in srgb, var(--slate-accent, #30b987) 9%, white));
+    radial-gradient(circle at 14% 0%, rgba(255, 255, 255, 0.92), transparent 40%),
+    linear-gradient(135deg, var(--slate-wash, #f8fafc), rgba(255, 255, 255, 0.98) 58%, color-mix(in srgb, var(--slate-accent, #30b987) 7%, white));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.84),
-    0 16px 34px -31px color-mix(in srgb, var(--slate-primary, #0f172a) 42%, transparent);
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.48),
+    0 16px 34px -31px color-mix(in srgb, var(--slate-primary, #0f172a) 34%, transparent);
 }
 
 .mobile-slate-option::before {
   position: absolute;
-  inset: 0;
+  inset: 1px;
   z-index: -1;
   content: "";
+  border-radius: inherit;
   background:
-    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--slate-accent, #30b987) 20%, transparent), transparent 46%),
-    linear-gradient(112deg, transparent 0 55%, rgba(255, 255, 255, 0.34) 55.4% 56.5%, transparent 57%);
-  opacity: 0.9;
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--slate-accent, #30b987) 15%, transparent), transparent 45%),
+    linear-gradient(112deg, transparent 0 55%, rgba(255, 255, 255, 0.28) 55.4% 56.5%, transparent 57%);
+  opacity: 0.82;
 }
 
 .mobile-slate-option::after {
   position: absolute;
-  inset: auto 0 0;
-  height: 3px;
+  inset: 0.55rem 0.65rem auto auto;
+  width: 2rem;
+  height: 0.26rem;
   content: "";
+  border-radius: 999px;
   background: linear-gradient(90deg, var(--slate-primary, #0f172a), var(--slate-accent, #30b987));
-  opacity: 0.72;
+  opacity: 0.9;
+  box-shadow: 0 8px 18px -12px color-mix(in srgb, var(--slate-primary, #0f172a) 70%, transparent);
 }
 
 .mobile-slate-option.is-active {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 18px 40px -30px color-mix(in srgb, var(--slate-primary, #0f172a) 62%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--slate-accent, #30b987) 18%, transparent);
+    inset 0 0 0 1px color-mix(in srgb, var(--slate-accent, #30b987) 18%, transparent),
+    0 18px 40px -30px color-mix(in srgb, var(--slate-primary, #0f172a) 56%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--slate-accent, #30b987) 20%, transparent);
 }
 
 .mobile-course-card,

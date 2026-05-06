@@ -24,6 +24,20 @@ export function MarkMateLogo({
       }}
     >
       <span
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(circle at 24% 12%, rgba(255,255,255,0.42), transparent 32%), linear-gradient(132deg, rgba(255,255,255,0.18), transparent 42%)",
+        }}
+      />
+      <span
+        className="absolute inset-[1px] rounded-[inherit]"
+        style={{
+          boxShadow:
+            "inset 0 1px 0 rgba(255,255,255,0.34), inset 0 -1px 0 rgba(255,255,255,0.08)",
+        }}
+      />
+      <span
         className="absolute inset-x-0 bottom-0 h-[18%]"
         style={{
           background:

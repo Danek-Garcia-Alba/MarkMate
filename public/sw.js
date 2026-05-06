@@ -1,4 +1,4 @@
-const CACHE_VERSION = "markmate-pwa-v10";
+const CACHE_VERSION = "markmate-pwa-v11";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/favicon.svg"];
 
 self.addEventListener("install", (event) => {
